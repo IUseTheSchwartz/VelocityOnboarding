@@ -1,44 +1,84 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Settings2, Users, Film, LayoutDashboard, Upload, Droplet } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Settings2, Users, Film, LayoutDashboard, Upload } from "lucide-react";
 import { useTheme } from "../theme";
-import { loadAgency, saveAgency, loadAgents } from "../lib/storage";
+import { supabase } from "../lib/supabaseClient";
+import { getCurrentAgency, listAgentsForMyAgency, upsertMyAgency } from "../lib/db";
 
 export default function AgencyConsole() {
   const { theme, setTheme } = useTheme();
-  const existing = useMemo(() => loadAgency(), []);
-  const [name, setName] = useState(existing?.name || "Your Agency");
-  const [slug, setSlug] = useState(existing?.slug || "your-agency");
-  const [primary, setPrimary] = useState(existing?.theme?.primary || theme.primary);
-  const [ink, setInk] = useState(existing?.theme?.ink || theme.ink);
-  const [logoUrl, setLogoUrl] = useState(existing?.logoUrl || "");
-  const agents = loadAgents();
+  const [name, setName] = useState("Your Agency");
+  const [slug, setSlug] = useState("your-agency");
+  const [primary, setPrimary] = useState(theme.primary);
+  const [ink, setInk] = useState(theme.ink);
+  const [logoUrl, setLogoUrl] = useState("");
+  const [agents, setAgents] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState("");
 
-  // propagate to ThemeProvider for live preview
+  useEffect(() => {
+    (async () => {
+      const a = await getCurrentAgency();
+      if (a) {
+        setName(a.name || "Your Agency");
+        setSlug(a.slug || "your-agency");
+        setLogoUrl(a.logo_url || "");
+        if (a.theme?.primary) setPrimary(a.theme.primary);
+        if (a.theme?.ink) setInk(a.theme.ink);
+        setTheme(a.theme || theme);
+      }
+      const list = await listAgentsForMyAgency();
+      setAgents(list);
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => { setTheme({ primary, ink }); }, [primary, ink, setTheme]);
 
-  function handleLogoFile(e) {
+  async function handleLogoFile(e) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    setLogoUrl(url);
+
+    // Ensure bucket exists: 'agency-logos'
+    const fileName = `${Date.now()}_${file.name.replace(/\s+/g,'_')}`;
+    const { data, error } = await supabase.storage
+      .from("agency-logos")
+      .upload(fileName, file, { upsert: false });
+    if (error) return setMsg(error.message);
+
+    const { data: pub } = supabase.storage.from("agency-logos").getPublicUrl(data.path);
+    setLogoUrl(pub.publicUrl);
+    setMsg("Logo uploaded.");
   }
 
-  function handleSave() {
-    const settings = { name, slug, logoUrl, theme: { primary, ink } };
-    saveAgency(settings);
-    alert("Saved agency settings to local preview.");
+  async function handleSave() {
+    try {
+      setSaving(true); setMsg("");
+      const saved = await upsertMyAgency({
+        name,
+        slug,
+        logo_url: logoUrl || null,
+        theme: { primary, ink },
+      });
+      setMsg("Saved agency settings.");
+    } catch (e) {
+      setMsg(String(e.message || e));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
     <section className="section">
       <div className="container">
         <div className="row" style={{ justifyContent: "space-between" }}>
-          <h2 className="h2">Agency Console (demo)</h2>
-          <span className="badge">Preview mode</span>
+          <h2 className="h2">Agency Console</h2>
+          <span className="badge">Authenticated</span>
         </div>
 
+        {msg && <div className="sub" style={{ margin: "8px 0", color: msg.includes("Saved") ? "green" : "crimson" }}>{msg}</div>}
+
         <div className="grid grid-3" style={{ marginTop: 8 }}>
-          {/* Brand builder */}
+          {/* Brand */}
           <div className="card">
             <div className="row" style={{ gap: 8 }}><Settings2 size={16}/><strong>Brand</strong></div>
             <div className="sep" />
@@ -48,20 +88,8 @@ export default function AgencyConsole() {
             <input value={slug} onChange={(e)=>setSlug(e.target.value.replace(/\s+/g,'-').toLowerCase())} style={input} />
 
             <div className="row" style={{ gap: 16, marginTop: 12, flexWrap: "wrap" }}>
-              <div>
-                <div className="sub" style={{ marginBottom: 6 }}>Primary Color</div>
-                <div className="row" style={{ gap: 8 }}>
-                  <input type="color" value={primary} onChange={(e)=>setPrimary(e.target.value)} title="Primary color" />
-                  <span className="kbd">{primary}</span>
-                </div>
-              </div>
-              <div>
-                <div className="sub" style={{ marginBottom: 6 }}>Heading Color</div>
-                <div className="row" style={{ gap: 8 }}>
-                  <input type="color" value={ink} onChange={(e)=>setInk(e.target.value)} title="Heading color" />
-                  <span className="kbd">{ink}</span>
-                </div>
-              </div>
+              <ColorPicker label="Primary Color" value={primary} setValue={setPrimary} />
+              <ColorPicker label="Heading Color" value={ink} setValue={setInk} />
             </div>
 
             <div style={{ marginTop: 12 }}>
@@ -74,14 +102,11 @@ export default function AgencyConsole() {
             </div>
 
             <div className="row" style={{ gap: 10, marginTop: 14 }}>
-              <button className="btn btn-primary" onClick={handleSave}>Save</button>
-              <button className="btn btn-ghost" onClick={()=>{setName("Your Agency");setSlug("your-agency");setPrimary("#1E63F0");setInk("#0B1535");setLogoUrl("");}}>
-                Reset
-              </button>
+              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Save"}</button>
             </div>
           </div>
 
-          {/* Curriculum overview (static) */}
+          {/* Curriculum (placeholder content; DB next phase) */}
           <div className="card">
             <div className="row" style={{ gap: 8 }}><Film size={16}/><strong>Curriculum</strong></div>
             <div className="sub" style={{ marginTop: 6 }}>Pre-Exam / Post-Exam / Pre-Sales</div>
@@ -93,20 +118,21 @@ export default function AgencyConsole() {
             </ul>
           </div>
 
-          {/* Team table (demo from local storage) */}
+          {/* Team from DB */}
           <div className="card">
             <div className="row" style={{ gap: 8 }}><Users size={16}/><strong>Team</strong></div>
             <div className="sep" />
             <table className="table">
-              <thead><tr><th>Agent</th><th>Status</th><th>Progress</th></tr></thead>
+              <thead><tr><th>Email</th><th>Role</th><th>Progress</th></tr></thead>
               <tbody>
                 {agents.map((a,i)=>(
                   <tr key={i}>
-                    <td>{a.name}</td>
-                    <td><span className="badge">{a.status}</span></td>
-                    <td>{a.progress}%</td>
+                    <td>{a.user_email}</td>
+                    <td><span className="badge">{a.role}</span></td>
+                    <td>{a.progress ?? 0}%</td>
                   </tr>
                 ))}
+                {agents.length === 0 && <tr><td colSpan="3" className="sub">No agents yet</td></tr>}
               </tbody>
             </table>
           </div>
@@ -115,7 +141,7 @@ export default function AgencyConsole() {
           <div className="card" style={{ gridColumn: "1 / -1" }}>
             <div className="row" style={{ gap: 8 }}><LayoutDashboard size={16}/><strong>Live Preview</strong></div>
             <div className="sep" />
-            <PreviewArea name={name} logoUrl={logoUrl} primary={primary} ink={ink} />
+            <Preview name={name} logoUrl={logoUrl} primary={primary} ink={ink} />
           </div>
         </div>
       </div>
@@ -123,7 +149,19 @@ export default function AgencyConsole() {
   );
 }
 
-function PreviewArea({ name, logoUrl, primary, ink }) {
+function ColorPicker({ label, value, setValue }) {
+  return (
+    <div>
+      <div className="sub" style={{ marginBottom: 6 }}>{label}</div>
+      <div className="row" style={{ gap: 8 }}>
+        <input type="color" value={value} onChange={(e)=>setValue(e.target.value)} title={label} />
+        <span className="kbd">{value}</span>
+      </div>
+    </div>
+  );
+}
+
+function Preview({ name, logoUrl, primary, ink }) {
   return (
     <div style={{ border: "1px dashed var(--border)", borderRadius: 12, overflow: "hidden" }}>
       <div style={{ background: "#fff" }}>
