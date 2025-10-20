@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Settings2, Users, Film, LayoutDashboard, Upload } from "lucide-react";
+import { Settings2, Users, Film, LayoutDashboard, Upload, ClipboardCopy, Ban } from "lucide-react";
 import { useTheme } from "../theme";
 import { supabase } from "../lib/supabaseClient";
 import { getUser, getCurrentAgency, listAgentsForMyAgency, upsertMyAgency } from "../lib/db";
@@ -12,6 +12,7 @@ export default function AgencyConsole() {
   const [ink, setInk] = useState(theme.ink);
   const [logoUrl, setLogoUrl] = useState("");
   const [agents, setAgents] = useState([]);
+  const [invites, setInvites] = useState([]);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -25,6 +26,7 @@ export default function AgencyConsole() {
         if (a.theme?.primary) setPrimary(a.theme.primary);
         if (a.theme?.ink) setInk(a.theme.ink);
         setTheme(a.theme || theme);
+        await fetchInvites(a.id);
       }
       const list = await listAgentsForMyAgency();
       setAgents(list);
@@ -34,13 +36,66 @@ export default function AgencyConsole() {
 
   useEffect(() => { setTheme({ primary, ink }); }, [primary, ink, setTheme]);
 
-  // Option A: public-read bucket (`agency-logos`) with auth-only writes
+  // ------- Invites --------
+  async function fetchInvites(agencyId) {
+    const { data, error } = await supabase
+      .from("invite_codes")
+      .select("id, code, status, expires_at, max_uses, uses, created_at")
+      .eq("agency_id", agencyId)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (!error) setInvites(data || []);
+  }
+
+  function makeCode(len = 6) {
+    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // avoid similar chars
+    return Array.from({ length: len }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
+  }
+
+  async function generateInvite() {
+    setMsg("");
+    const { data: userRes } = await supabase.auth.getUser();
+    if (!userRes?.user) return setMsg("Not signed in.");
+    const a = await getCurrentAgency();
+    if (!a) return setMsg("Create your agency first.");
+
+    const code = makeCode(6);
+    const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    const { error } = await supabase.from("invite_codes").insert({
+      agency_id: a.id,
+      code,
+      role: "agent",
+      max_uses: 1,
+      expires_at: expires,
+      created_by: userRes.user.id
+    });
+
+    if (error) return setMsg(error.message);
+    setMsg("Invite created.");
+    await fetchInvites(a.id);
+  }
+
+  async function disableInvite(id) {
+    setMsg("");
+    const { error } = await supabase.from("invite_codes").update({ status: "disabled" }).eq("id", id);
+    if (error) return setMsg(error.message);
+    const a = await getCurrentAgency();
+    if (a) await fetchInvites(a.id);
+    setMsg("Invite disabled.");
+  }
+
+  function copy(text) {
+    navigator.clipboard.writeText(text);
+    setMsg("Copied to clipboard.");
+  }
+
+  // ------- Logo upload (public bucket) --------
   async function handleLogoFile(e) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // basic validation
-    const okTypes = ["image/png","image/jpeg","image/svg+xml","image/webp"];
+    const okTypes = ["image/png", "image/jpeg", "image/svg+xml", "image/webp"];
     if (!okTypes.includes(file.type)) {
       setMsg("Please upload PNG, JPG, SVG, or WEBP.");
       return;
@@ -68,10 +123,7 @@ export default function AgencyConsole() {
       return;
     }
 
-    const { data: pub } = supabase.storage
-      .from("agency-logos")
-      .getPublicUrl(data.path);
-
+    const { data: pub } = supabase.storage.from("agency-logos").getPublicUrl(data.path);
     setLogoUrl(pub.publicUrl);
     setMsg("Logo uploaded.");
   }
@@ -101,17 +153,21 @@ export default function AgencyConsole() {
           <span className="badge">Authenticated</span>
         </div>
 
-        {msg && <div className="sub" style={{ margin: "8px 0", color: msg.toLowerCase().includes("saved") || msg.toLowerCase().includes("uploaded") ? "green" : "crimson" }}>{msg}</div>}
+        {msg && (
+          <div className="sub" style={{ margin: "8px 0", color: /saved|uploaded|copied|created|disabled/i.test(msg) ? "green" : "crimson" }}>
+            {msg}
+          </div>
+        )}
 
         <div className="grid grid-3" style={{ marginTop: 8 }}>
           {/* Brand */}
           <div className="card">
-            <div className="row" style={{ gap: 8 }}><Settings2 size={16}/><strong>Brand</strong></div>
+            <div className="row" style={{ gap: 8 }}><Settings2 size={16} /><strong>Brand</strong></div>
             <div className="sep" />
             <label>Agency Name</label>
-            <input value={name} onChange={(e)=>setName(e.target.value)} style={input} />
+            <input value={name} onChange={(e) => setName(e.target.value)} style={input} />
             <label style={{ marginTop: 8 }}>Agency Slug (for URL)</label>
-            <input value={slug} onChange={(e)=>setSlug(e.target.value.replace(/\s+/g,'-').toLowerCase())} style={input} />
+            <input value={slug} onChange={(e) => setSlug(e.target.value.replace(/\s+/g, '-').toLowerCase())} style={input} />
 
             <div className="row" style={{ gap: 16, marginTop: 12, flexWrap: "wrap" }}>
               <ColorPicker label="Primary Color" value={primary} setValue={setPrimary} />
@@ -121,10 +177,10 @@ export default function AgencyConsole() {
             <div style={{ marginTop: 12 }}>
               <div className="sub" style={{ marginBottom: 6 }}>Logo</div>
               <label className="btn btn-ghost" style={{ display: "inline-flex", gap: 8, alignItems: "center", cursor: "pointer" }}>
-                <Upload size={16}/> Upload logo
+                <Upload size={16} /> Upload logo
                 <input type="file" accept="image/*" onChange={handleLogoFile} style={{ display: "none" }} />
               </label>
-              {logoUrl && <div style={{ marginTop: 8 }}><img src={logoUrl} alt="logo preview" style={{ maxHeight: 44 }}/></div>}
+              {logoUrl && <div style={{ marginTop: 8 }}><img src={logoUrl} alt="logo preview" style={{ maxHeight: 44 }} /></div>}
             </div>
 
             <div className="row" style={{ gap: 10, marginTop: 14 }}>
@@ -134,7 +190,7 @@ export default function AgencyConsole() {
 
           {/* Curriculum (placeholder content; DB next phase) */}
           <div className="card">
-            <div className="row" style={{ gap: 8 }}><Film size={16}/><strong>Curriculum</strong></div>
+            <div className="row" style={{ gap: 8 }}><Film size={16} /><strong>Curriculum</strong></div>
             <div className="sub" style={{ marginTop: 6 }}>Pre-Exam / Post-Exam / Pre-Sales</div>
             <div className="sep" />
             <ul style={{ paddingLeft: 18 }}>
@@ -146,12 +202,12 @@ export default function AgencyConsole() {
 
           {/* Team from DB */}
           <div className="card">
-            <div className="row" style={{ gap: 8 }}><Users size={16}/><strong>Team</strong></div>
+            <div className="row" style={{ gap: 8 }}><Users size={16} /><strong>Team</strong></div>
             <div className="sep" />
             <table className="table">
               <thead><tr><th>Email</th><th>Role</th><th>Progress</th></tr></thead>
               <tbody>
-                {agents.map((a,i)=>(
+                {agents.map((a, i) => (
                   <tr key={i}>
                     <td>{a.user_email}</td>
                     <td><span className="badge">{a.role}</span></td>
@@ -163,9 +219,51 @@ export default function AgencyConsole() {
             </table>
           </div>
 
+          {/* Invites */}
+          <div className="card" style={{ gridColumn: "1 / -1" }}>
+            <div className="row" style={{ gap: 8 }}><Settings2 size={16} /><strong>Invite Agents</strong></div>
+            <div className="sep" />
+
+            <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+              <button className="btn btn-primary" onClick={generateInvite}>Generate invite code</button>
+              <div className="sub">Codes expire in 7 days • 1 use (owner can disable)</div>
+            </div>
+
+            <table className="table" style={{ marginTop: 12 }}>
+              <thead>
+                <tr><th>Code</th><th>Status</th><th>Expires</th><th>Actions</th></tr>
+              </thead>
+              <tbody>
+                {invites.length === 0 && (
+                  <tr><td className="sub" colSpan="4">No invites yet</td></tr>
+                )}
+                {invites.map(inv => {
+                  const url = `${window.location.origin}/login/agent?code=${encodeURIComponent(inv.code)}`;
+                  return (
+                    <tr key={inv.id}>
+                      <td><code>{inv.code}</code></td>
+                      <td><span className="badge">{inv.status}</span></td>
+                      <td>{inv.expires_at ? new Date(inv.expires_at).toLocaleString() : "—"}</td>
+                      <td className="row" style={{ gap: 8 }}>
+                        <button className="btn btn-ghost" onClick={() => copy(url)} title="Copy signup link">
+                          <ClipboardCopy size={14} /> Copy link
+                        </button>
+                        {inv.status === "active" && (
+                          <button className="btn btn-ghost" onClick={() => disableInvite(inv.id)} title="Disable">
+                            <Ban size={14} /> Disable
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
           {/* Live preview */}
           <div className="card" style={{ gridColumn: "1 / -1" }}>
-            <div className="row" style={{ gap: 8 }}><LayoutDashboard size={16}/><strong>Live Preview</strong></div>
+            <div className="row" style={{ gap: 8 }}><LayoutDashboard size={16} /><strong>Live Preview</strong></div>
             <div className="sep" />
             <Preview name={name} logoUrl={logoUrl} primary={primary} ink={ink} />
           </div>
@@ -180,7 +278,7 @@ function ColorPicker({ label, value, setValue }) {
     <div>
       <div className="sub" style={{ marginBottom: 6 }}>{label}</div>
       <div className="row" style={{ gap: 8 }}>
-        <input type="color" value={value} onChange={(e)=>setValue(e.target.value)} title={label} />
+        <input type="color" value={value} onChange={(e) => setValue(e.target.value)} title={label} />
         <span className="kbd">{value}</span>
       </div>
     </div>
@@ -192,7 +290,7 @@ function Preview({ name, logoUrl, primary, ink }) {
     <div style={{ border: "1px dashed var(--border)", borderRadius: 12, overflow: "hidden" }}>
       <div style={{ background: "#fff" }}>
         <div style={{ padding: 16, display: "flex", alignItems: "center", gap: 10, borderBottom: "1px solid var(--border)" }}>
-          <div style={{ width: 28, height: 28, borderRadius: 8, background: `linear-gradient(135deg, ${lighten(primary,30)} 0%, ${primary} 70%)` }} />
+          <div style={{ width: 28, height: 28, borderRadius: 8, background: `linear-gradient(135deg, ${lighten(primary, 30)} 0%, ${primary} 70%)` }} />
           {logoUrl ? <img src={logoUrl} alt="logo" style={{ height: 22 }} /> : <strong style={{ color: ink }}>{name}</strong>}
         </div>
         <div style={{ padding: 22 }}>
@@ -208,11 +306,11 @@ function Preview({ name, logoUrl, primary, ink }) {
   );
 }
 
-function lighten(hex, amount=30) {
-  const n = hex.replace("#",""); const num = parseInt(n,16);
-  let r=(num>>16)+amount, g=((num>>8)&0xff)+amount, b=(num&0xff)+amount;
-  r=Math.min(255,Math.max(0,r)); g=Math.min(255,Math.max(0,g)); b=Math.min(255,Math.max(0,b));
-  return `#${(r<<16 | g<<8 | b).toString(16).padStart(6,"0")}`;
+function lighten(hex, amount = 30) {
+  const n = hex.replace("#", ""); const num = parseInt(n, 16);
+  let r = (num >> 16) + amount, g = ((num >> 8) & 0xff) + amount, b = (num & 0xff) + amount;
+  r = Math.min(255, Math.max(0, r)); g = Math.min(255, Math.max(0, g)); b = Math.min(255, Math.max(0, b));
+  return `#${(r << 16 | g << 8 | b).toString(16).padStart(6, "0")}`;
 }
 
-const input = { width:"100%", border:"1px solid var(--border)", borderRadius:10, padding:"10px 12px", outline:"none", fontSize:14 };
+const input = { width: "100%", border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px", outline: "none", fontSize: 14 };
