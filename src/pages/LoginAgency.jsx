@@ -11,8 +11,15 @@ export default function LoginAgency() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  async function isAdminEmail(emLower) {
-    const { data } = await supabase.from("admin_users").select("email").eq("email", emLower).maybeSingle();
+  async function isCurrentUserAdmin() {
+    const { data: me } = await supabase.auth.getUser();
+    const emLower = (me?.user?.email || "").toLowerCase();
+    if (!emLower) return false;
+    const { data } = await supabase
+      .from("admin_users")
+      .select("email")
+      .eq("email", emLower)
+      .maybeSingle();
     return !!data;
   }
 
@@ -31,9 +38,9 @@ export default function LoginAgency() {
         if (error) throw error;
       }
 
-      // route based on admin table (no more hardcode)
-      const admin = await isAdminEmail(em);
-      navigate(admin ? "/super" : "/agency");
+      // IMPORTANT: check admin by the session email (not the typed one)
+      const isAdmin = await isCurrentUserAdmin();
+      navigate(isAdmin ? "/super" : "/agency");
     } catch (e) {
       setErr(e.message || String(e));
     } finally {
