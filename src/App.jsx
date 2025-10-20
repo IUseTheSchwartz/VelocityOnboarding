@@ -27,10 +27,19 @@ function SiteShell() {
             <div className="brand-mark" />
             <div>VelocityOnboard</div>
           </Link>
-          <div style={{ marginLeft: "auto", display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <div style={{ marginLeft: "auto", display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
             <NavLink to="/" active={pathname === "/"}>Landing</NavLink>
             <NavLink to="/login/agent" active={pathname === "/login/agent"}>Agent Login</NavLink>
             <NavLink to="/login/agency" active={pathname === "/login/agency"}>Agency Login</NavLink>
+
+            {/* Book a demo (mailto for now) */}
+            <a
+              className="btn btn-primary"
+              href="mailto:hello@velocityonboard.com?subject=Book%20a%20demo"
+              style={{ textDecoration: "none", marginLeft: 6 }}
+            >
+              Book a demo
+            </a>
             {/* Super Admin intentionally not shown in nav */}
           </div>
         </div>
