@@ -7,6 +7,7 @@ import SuperAdmin from "./pages/SuperAdmin";
 import Landing from "./pages/Landing";
 import LoginAgent from "./pages/LoginAgent";
 import LoginAgency from "./pages/LoginAgency";
+import RequireAuth from "./lib/RequireAuth";
 
 export default function App() {
   return (
@@ -41,9 +42,31 @@ function SiteShell() {
         <Route path="/" element={<Landing />} />
         <Route path="/login/agent" element={<LoginAgent />} />
         <Route path="/login/agency" element={<LoginAgency />} />
-        <Route path="/agent" element={<Agent />} />
-        <Route path="/agency" element={<AgencyConsole />} />
-        <Route path="/super" element={<SuperAdmin />} />
+
+        <Route
+          path="/agent"
+          element={
+            <RequireAuth>
+              <Agent />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/agency"
+          element={
+            <RequireAuth>
+              <AgencyConsole />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/super"
+          element={
+            <RequireAuth>
+              <SuperAdmin />
+            </RequireAuth>
+          }
+        />
       </Routes>
 
       <footer className="section" style={{ borderTop: "1px solid var(--border)" }}>
