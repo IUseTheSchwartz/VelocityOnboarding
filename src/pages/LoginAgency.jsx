@@ -6,7 +6,6 @@ import { supabase } from "../lib/supabaseClient";
 export default function LoginAgency() {
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
-  const [mode, setMode] = useState("login"); // "login" | "signup"
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -30,15 +29,11 @@ export default function LoginAgency() {
     const em = (email || "").trim().toLowerCase();
 
     try {
-      if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({ email: em, password: pass });
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({ email: em, password: pass });
-        if (error) throw error;
-      }
+      // LOGIN ONLY (no signups here—owners must be invited)
+      const { error } = await supabase.auth.signInWithPassword({ email: em, password: pass });
+      if (error) throw error;
 
-      // IMPORTANT: check admin by the session email (not the typed one)
+      // route by session email’s admin status
       const isAdmin = await isCurrentUserAdmin();
       navigate(isAdmin ? "/super" : "/agency");
     } catch (e) {
@@ -54,7 +49,7 @@ export default function LoginAgency() {
         <form className="card" onSubmit={handleSubmit}>
           <div className="row" style={{ gap: 8 }}>
             <LogIn size={18} />
-            <strong>{mode === "login" ? "Agency Login" : "Create Agency Owner Account"}</strong>
+            <strong>Agency Login</strong>
           </div>
           <div className="sep" />
           <label>Agency Email</label>
@@ -66,11 +61,12 @@ export default function LoginAgency() {
 
           <div className="row" style={{ gap: 10, marginTop: 14 }}>
             <button className="btn btn-primary" type="submit" disabled={loading}>
-              {loading ? "Please wait…" : mode === "login" ? "Login" : "Create account"}
+              {loading ? "Please wait…" : "Login"}
             </button>
-            <button type="button" className="btn btn-ghost" onClick={()=>setMode(mode === "login" ? "signup" : "login")}>
-              {mode === "login" ? "Need an account? Sign up" : "Have an account? Log in"}
-            </button>
+          </div>
+
+          <div className="sub" style={{ marginTop: 10 }}>
+            Don’t have access? Ask a Super Admin to send you an owner invite link.
           </div>
         </form>
       </div>
