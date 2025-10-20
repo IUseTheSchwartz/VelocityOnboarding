@@ -8,21 +8,33 @@ const SUPER_ADMIN_EMAIL = (import.meta.env.VITE_SUPER_ADMIN_EMAIL || "jacobpriet
 export default function LoginAgency() {
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
+  const [mode, setMode] = useState("login"); // "login" | "signup"
   const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   async function handleSubmit(e) {
     e.preventDefault();
     setErr("");
+    setLoading(true);
     const em = (email || "").trim().toLowerCase();
 
-    const { error } = await supabase.auth.signInWithPassword({ email: em, password: pass });
-    if (error) return setErr(error.message);
+    try {
+      if (mode === "signup") {
+        const { error } = await supabase.auth.signUp({ email: em, password: pass });
+        if (error) throw error;
+        // user is signed in right away in email/password flow (unless confirm email is on)
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email: em, password: pass });
+        if (error) throw error;
+      }
 
-    if (em === SUPER_ADMIN_EMAIL) {
-      navigate("/super");
-    } else {
-      navigate("/agency");
+      if (em === SUPER_ADMIN_EMAIL) navigate("/super");
+      else navigate("/agency");
+    } catch (e) {
+      setErr(e.message || String(e));
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -31,20 +43,36 @@ export default function LoginAgency() {
       <div className="container" style={{ maxWidth: 520 }}>
         <form className="card" onSubmit={handleSubmit}>
           <div className="row" style={{ gap: 8 }}>
-            <LogIn size={18} /><strong>Agency Login</strong>
+            <LogIn size={18} />
+            <strong>{mode === "login" ? "Agency Login" : "Create Agency Owner Account"}</strong>
           </div>
           <div className="sep" />
           <label>Agency Email</label>
           <input value={email} onChange={(e)=>setEmail(e.target.value)} placeholder="owner@agency.com" style={input} />
           <label style={{ marginTop: 10 }}>Password</label>
           <input type="password" value={pass} onChange={(e)=>setPass(e.target.value)} placeholder="••••••••" style={input} />
+
           {err && <div className="sub" style={{ color: "crimson", marginTop: 8 }}>{err}</div>}
+
           <div className="row" style={{ gap: 10, marginTop: 14 }}>
-            <button className="btn btn-primary" type="submit">Login</button>
+            <button className="btn btn-primary" type="submit" disabled={loading}>
+              {loading ? "Please wait…" : mode === "login" ? "Login" : "Create account"}
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={()=>setMode(mode === "login" ? "signup" : "login")}
+            >
+              {mode === "login" ? "Need an account? Sign up" : "Have an account? Log in"}
+            </button>
           </div>
         </form>
       </div>
     </section>
   );
 }
-const input = { width: "100%", border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px", outline: "none", fontSize: 14 };
+
+const input = {
+  width: "100%", border: "1px solid var(--border)", borderRadius: 10,
+  padding: "10px 12px", outline: "none", fontSize: 14,
+};
