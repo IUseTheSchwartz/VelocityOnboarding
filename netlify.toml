@@ -1,0 +1,17 @@
+# Netlify config for VelocityOnboard (Vite + React)
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  # Optional, but helps keep builds consistent
+  NODE_VERSION = "22"
+
+# If you did NOT create public/_redirects, uncomment this block
+# to enable SPA routing (client-side routes) via Netlify:
+#
+#[[redirects]]
+#  from = "/*"
+#  to = "/index.html"
+#  status = 200
