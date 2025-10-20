@@ -1,3 +1,4 @@
+// src/pages/AgencyConsole.jsx
 import React, { useEffect, useState } from "react";
 import { Settings2, Users, Film, LayoutDashboard, Upload, ClipboardCopy, Ban } from "lucide-react";
 import { useTheme } from "../theme";
@@ -18,18 +19,11 @@ export default function AgencyConsole() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
 
-  // 🚧 If the signed-in user is an admin, bounce them to /super
+  // 🚧 If the signed-in user is an admin, bounce them to /super (uses RPC to avoid RLS/casing issues)
   useEffect(() => {
     (async () => {
-      const { data: me } = await supabase.auth.getUser();
-      const emLower = (me?.user?.email || "").toLowerCase();
-      if (!emLower) return;
-      const { data } = await supabase
-        .from("admin_users")
-        .select("email")
-        .eq("email", emLower)
-        .maybeSingle();
-      if (data) navigate("/super");
+      const { data, error } = await supabase.rpc("is_current_admin");
+      if (!error && data) navigate("/super");
     })();
   }, [navigate]);
 
