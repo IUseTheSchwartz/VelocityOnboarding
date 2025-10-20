@@ -11,15 +11,8 @@ export default function LoginAgency() {
   const navigate = useNavigate();
 
   async function isCurrentUserAdmin() {
-    const { data: me } = await supabase.auth.getUser();
-    const emLower = (me?.user?.email || "").toLowerCase();
-    if (!emLower) return false;
-    const { data } = await supabase
-      .from("admin_users")
-      .select("email")
-      .eq("email", emLower)
-      .maybeSingle();
-    return !!data;
+    const { data, error } = await supabase.rpc("is_current_admin");
+    return !!data && !error;
   }
 
   async function handleSubmit(e) {
@@ -29,11 +22,10 @@ export default function LoginAgency() {
     const em = (email || "").trim().toLowerCase();
 
     try {
-      // LOGIN ONLY (no signups here—owners must be invited)
+      // LOGIN ONLY (invite-only elsewhere)
       const { error } = await supabase.auth.signInWithPassword({ email: em, password: pass });
       if (error) throw error;
 
-      // route by session email’s admin status
       const isAdmin = await isCurrentUserAdmin();
       navigate(isAdmin ? "/super" : "/agency");
     } catch (e) {
