@@ -31,8 +31,6 @@ function SiteShell() {
             <NavLink to="/" active={pathname === "/"}>Landing</NavLink>
             <NavLink to="/login/agent" active={pathname === "/login/agent"}>Agent Login</NavLink>
             <NavLink to="/login/agency" active={pathname === "/login/agency"}>Agency Login</NavLink>
-            <NavLink to="/agent" active={pathname === "/agent"}>Agent</NavLink>
-            <NavLink to="/agency" active={pathname === "/agency"}>Agency</NavLink>
             {/* Super Admin intentionally not shown in nav */}
           </div>
         </div>
