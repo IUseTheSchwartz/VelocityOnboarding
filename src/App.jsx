@@ -1,11 +1,12 @@
 import React from "react";
 import { Routes, Route, Link, useLocation } from "react-router-dom";
 import { ThemeProvider } from "./theme";
-import Login from "./pages/Login";
 import Agent from "./pages/Agent";
 import AgencyConsole from "./pages/AgencyConsole";
 import SuperAdmin from "./pages/SuperAdmin";
 import Landing from "./pages/Landing";
+import LoginAgent from "./pages/LoginAgent";
+import LoginAgency from "./pages/LoginAgency";
 
 export default function App() {
   return (
@@ -27,17 +28,19 @@ function SiteShell() {
           </Link>
           <div style={{ marginLeft: "auto", display: "flex", gap: 6, flexWrap: "wrap" }}>
             <NavLink to="/" active={pathname === "/"}>Landing</NavLink>
-            <NavLink to="/login" active={pathname === "/login"}>Login</NavLink>
+            <NavLink to="/login/agent" active={pathname === "/login/agent"}>Agent Login</NavLink>
+            <NavLink to="/login/agency" active={pathname === "/login/agency"}>Agency Login</NavLink>
             <NavLink to="/agent" active={pathname === "/agent"}>Agent</NavLink>
             <NavLink to="/agency" active={pathname === "/agency"}>Agency</NavLink>
-            <NavLink to="/super" active={pathname === "/super"}>Super Admin</NavLink>
+            {/* Super Admin intentionally not shown in nav */}
           </div>
         </div>
       </nav>
 
       <Routes>
         <Route path="/" element={<Landing />} />
-        <Route path="/login" element={<Login />} />
+        <Route path="/login/agent" element={<LoginAgent />} />
+        <Route path="/login/agency" element={<LoginAgency />} />
         <Route path="/agent" element={<Agent />} />
         <Route path="/agency" element={<AgencyConsole />} />
         <Route path="/super" element={<SuperAdmin />} />
