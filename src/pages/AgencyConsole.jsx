@@ -3,8 +3,10 @@ import { Settings2, Users, Film, LayoutDashboard, Upload, ClipboardCopy, Ban } f
 import { useTheme } from "../theme";
 import { supabase } from "../lib/supabaseClient";
 import { getUser, getCurrentAgency, listAgentsForMyAgency, upsertMyAgency } from "../lib/db";
+import { useNavigate } from "react-router-dom";
 
 export default function AgencyConsole() {
+  const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
   const [name, setName] = useState("Your Agency");
   const [slug, setSlug] = useState("your-agency");
@@ -15,6 +17,21 @@ export default function AgencyConsole() {
   const [invites, setInvites] = useState([]);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
+
+  // 🚧 If the signed-in user is an admin, bounce them to /super
+  useEffect(() => {
+    (async () => {
+      const { data: me } = await supabase.auth.getUser();
+      const emLower = (me?.user?.email || "").toLowerCase();
+      if (!emLower) return;
+      const { data } = await supabase
+        .from("admin_users")
+        .select("email")
+        .eq("email", emLower)
+        .maybeSingle();
+      if (data) navigate("/super");
+    })();
+  }, [navigate]);
 
   useEffect(() => {
     (async () => {
