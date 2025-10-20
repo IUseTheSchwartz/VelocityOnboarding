@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import {
   LayoutDashboard, Users, Search, RefreshCw, ShieldAlert, Edit3, Save, X,
-  PauseCircle, PlayCircle, Trash2, UserMinus, UserCog, Plus, ClipboardCopy
+  PauseCircle, PlayCircle, Trash2, UserMinus, UserCog, Plus, ClipboardCopy, Link2
 } from "lucide-react";
 
 export default function SuperAdmin() {
@@ -17,6 +17,11 @@ export default function SuperAdmin() {
   const [invites, setInvites] = useState([]);
   const [admins, setAdmins] = useState([]);
   const [msg, setMsg] = useState("");
+
+  // invite creator controls (for Super Admin)
+  const [inviteRole, setInviteRole] = useState("agent");   // agent | manager | owner
+  const [inviteUses, setInviteUses] = useState(1);
+  const [inviteDays, setInviteDays] = useState(7);
 
   useEffect(() => { (async () => {
     const { data } = await supabase.auth.getUser();
@@ -56,7 +61,7 @@ export default function SuperAdmin() {
     setInvites([]);
     const { data, error } = await supabase
       .from("invite_codes")
-      .select("id, code, status, expires_at, max_uses, uses, created_at")
+      .select("id, code, status, expires_at, max_uses, uses, created_at, role")
       .eq("agency_id", agencyId)
       .order("created_at", { ascending: false });
     if (!error) setInvites(data || []);
@@ -137,7 +142,7 @@ export default function SuperAdmin() {
     await fetchMembers(agencyId);
   }
 
-  // ---- Invites: create / disable ----
+  // ---- Invite making (any role) ----
   function makeCode(len = 6) {
     const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     return Array.from({ length: len }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
@@ -145,9 +150,19 @@ export default function SuperAdmin() {
 
   async function createInvite(agencyId) {
     setMsg("");
+    const { data: meRes } = await supabase.auth.getUser();
     const code = makeCode(6);
-    const expires = new Date(Date.now() + 7*24*60*60*1000).toISOString();
-    const { error } = await supabase.from("invite_codes").insert({ agency_id: agencyId, code, role: "agent", max_uses: 1, expires_at: expires, created_by: me.id });
+    const expires = new Date(Date.now() + Number(inviteDays) * 24*60*60*1000).toISOString();
+    const uses = Math.max(1, Number(inviteUses) || 1);
+
+    const { error } = await supabase.from("invite_codes").insert({
+      agency_id: agencyId,
+      code,
+      role: inviteRole,       // agent | manager | owner
+      max_uses: uses,
+      expires_at: expires,
+      created_by: meRes?.user?.id || null
+    });
     if (error) return setMsg(error.message);
     setMsg("Invite created.");
     await fetchInvites(agencyId);
@@ -182,7 +197,6 @@ export default function SuperAdmin() {
 
   async function removeAdmin(email) {
     setMsg("");
-    // Prevent removing yourself (optional safety)
     if (email === (me?.email || "").toLowerCase()) return setMsg("You can’t remove yourself.");
     const { error } = await supabase.from("admin_users").delete().eq("email", email);
     if (error) return setMsg(error.message);
@@ -194,9 +208,7 @@ export default function SuperAdmin() {
   const [uiAdmin, setUiAdmin] = useState(false);
   useEffect(() => { (async () => setUiAdmin(await isAdminUI()))(); /* eslint-disable-next-line */ }, [me]);
 
-  if (!me) {
-    return <Section><div className="sub">Loading…</div></Section>;
-  }
+  if (!me) return <Section><div className="sub">Loading…</div></Section>;
   if (!uiAdmin) {
     return (
       <Section>
@@ -216,7 +228,7 @@ export default function SuperAdmin() {
             <LayoutDashboard size={18}/> Super Admin
           </h2>
 
-        <div className="row" style={{ gap: 8, alignItems: "center" }}>
+          <div className="row" style={{ gap: 8, alignItems: "center" }}>
             <button className={`btn ${tab==='agencies'?'btn-primary':'btn-ghost'}`} onClick={()=>setTab('agencies')}>Agencies</button>
             <button className={`btn ${tab==='admins'?'btn-primary':'btn-ghost'}`} onClick={()=>setTab('admins')}>Admins</button>
 
@@ -295,6 +307,7 @@ export default function SuperAdmin() {
                 </div>
                 <div className="sep" />
 
+                {/* Branding */}
                 <div className="grid grid-3">
                   <div>
                     <label>Name</label>
@@ -344,21 +357,34 @@ export default function SuperAdmin() {
                   </tbody>
                 </table>
 
-                {/* Invites */}
+                {/* Invites (new: role, uses, expiry; copy link) */}
                 <div className="sep" />
                 <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
                   <strong>Invite Codes</strong>
-                  <button className="btn btn-ghost" onClick={()=>createInvite(selected.id)}><Plus size={14}/> New invite</button>
+                  <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    <label className="sub">Role</label>
+                    <select value={inviteRole} onChange={(e)=>setInviteRole(e.target.value)} className="btn btn-ghost">
+                      <option value="agent">agent</option>
+                      <option value="manager">manager</option>
+                      <option value="owner">owner</option>
+                    </select>
+                    <label className="sub">Uses</label>
+                    <input type="number" min={1} value={inviteUses} onChange={(e)=>setInviteUses(e.target.value)} className="btn btn-ghost" style={{ width: 80 }} />
+                    <label className="sub">Days</label>
+                    <input type="number" min={1} value={inviteDays} onChange={(e)=>setInviteDays(e.target.value)} className="btn btn-ghost" style={{ width: 80 }} />
+                    <button className="btn btn-ghost" onClick={()=>createInvite(selected.id)}><Plus size={14}/> New invite</button>
+                  </div>
                 </div>
                 <table className="table" style={{ marginTop: 8 }}>
-                  <thead><tr><th>Code</th><th>Status</th><th>Expires</th><th>Actions</th></tr></thead>
+                  <thead><tr><th>Code</th><th>Role</th><th>Status</th><th>Expires</th><th>Actions</th></tr></thead>
                   <tbody>
-                    {invites.length === 0 && <tr><td className="sub" colSpan="4">No invites</td></tr>}
+                    {invites.length === 0 && <tr><td className="sub" colSpan="5">No invites</td></tr>}
                     {invites.map(inv => {
                       const url = `${window.location.origin}/login/agent?code=${encodeURIComponent(inv.code)}`;
                       return (
                         <tr key={inv.id}>
                           <td><code>{inv.code}</code></td>
+                          <td>{inv.role}</td>
                           <td><span className="badge">{inv.status}</span></td>
                           <td>{inv.expires_at ? new Date(inv.expires_at).toLocaleString() : "—"}</td>
                           <td className="row" style={{ gap: 6 }}>
@@ -366,6 +392,9 @@ export default function SuperAdmin() {
                             {inv.status === "active" && (
                               <button className="btn btn-ghost" onClick={()=>disableInvite(inv.id, selected.id)} title="Disable"><Trash2 size={14}/> Disable</button>
                             )}
+                            <a className="btn btn-ghost" href={url} target="_blank" rel="noreferrer" title="Open link">
+                              <Link2 size={14}/> Open
+                            </a>
                           </td>
                         </tr>
                       );
