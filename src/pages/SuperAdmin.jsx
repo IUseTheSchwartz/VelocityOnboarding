@@ -29,10 +29,9 @@ export default function SuperAdmin() {
   })(); }, []);
 
   const isAdminUI = async () => {
-    const email = (me?.email || "").toLowerCase();
-    if (!email) return false;
-    const { data, error } = await supabase.from("admin_users").select("email").eq("email", email).maybeSingle();
-    return !!data && !error;
+    const { data, error } = await supabase.rpc("is_current_admin");
+    if (error) return false;
+    return !!data;
   };
 
   async function fetchAgencies() {
@@ -357,7 +356,7 @@ export default function SuperAdmin() {
                   </tbody>
                 </table>
 
-                {/* Invites (new: role, uses, expiry; copy link) */}
+                {/* Invites (role, uses, expiry; copy/open/disable) */}
                 <div className="sep" />
                 <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
                   <strong>Invite Codes</strong>
