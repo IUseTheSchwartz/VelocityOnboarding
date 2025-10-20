@@ -20,8 +20,6 @@ import {
  * All forms are non-functional; buttons just switch "views".
  */
 
-const VIEWS = ["landing", "login", "signup", "agent", "owner", "super"];
-
 const PRICING = {
   setup: [
     {
