@@ -1,18 +1,21 @@
-import React, { createContext, useContext, useMemo, useState } from "react";
-import { loadAgency } from "./lib/storage";
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { supabase } from "./lib/supabaseClient";
+import { getCurrentAgency } from "./lib/db";
 
 const ThemeCtx = createContext();
 
 export function ThemeProvider({ children }) {
-  const initial = loadAgency();
-  const [theme, setTheme] = useState(
-    initial?.theme || { primary: "#1E63F0", ink: "#0B1535" }
-  );
+  const [theme, setTheme] = useState({ primary: "#1E63F0", ink: "#0B1535" });
 
-  const value = useMemo(() => ({ theme, setTheme }), [theme]);
+  useEffect(() => {
+    (async () => {
+      const a = await getCurrentAgency();
+      if (a?.theme) setTheme(a.theme);
+    })();
+  }, []);
 
   return (
-    <ThemeCtx.Provider value={value}>
+    <ThemeCtx.Provider value={{ theme, setTheme }}>
       {children}
     </ThemeCtx.Provider>
   );
