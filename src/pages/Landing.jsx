@@ -30,12 +30,6 @@ export default function Landing() {
             We build a white-labeled training hub for your agency—study plan to first sale—with checklists, quizzes, progress tracking, and Q&amp;A.
           </p>
 
-          {/* Direct logins */}
-          <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
-            <a className="btn btn-primary" href="/login/agent">Agent Login</a>
-            <a className="btn btn-ghost" href="/login/agency">Agency Login</a>
-          </div>
-
           <div className="grid grid-3" style={{ marginTop: 28 }}>
             <Feature icon={<Film size={18} />} title="Guided lessons" desc="Pre-Exam, Post-Exam, and Pre-Sales tracks with videos & quick reads." />
             <Feature icon={<CheckCircle2 size={18} />} title="Checklists & quizzes" desc="Gate progress with required steps and lightweight quizzes." />
@@ -47,7 +41,7 @@ export default function Landing() {
       <section className="section" style={{ background: "var(--panel)" }}>
         <div className="container">
           <h2 className="h2">Pricing</h2>
-        <p className="sub">Setup fee covers branding & content tailoring. Monthly covers hosting, updates, and support.</p>
+          <p className="sub">Setup fee covers branding & content tailoring. Monthly covers hosting, updates, and support.</p>
 
           <div className="grid grid-3" style={{ marginTop: 16 }}>
             {PRICING.setup.map((p) => (
