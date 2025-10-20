@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Settings2, Users, Film, LayoutDashboard, Upload } from "lucide-react";
 import { useTheme } from "../theme";
 import { supabase } from "../lib/supabaseClient";
-import { getCurrentAgency, listAgentsForMyAgency, upsertMyAgency } from "../lib/db";
+import { getUser, getCurrentAgency, listAgentsForMyAgency, upsertMyAgency } from "../lib/db";
 
 export default function AgencyConsole() {
   const { theme, setTheme } = useTheme();
@@ -29,23 +29,49 @@ export default function AgencyConsole() {
       const list = await listAgentsForMyAgency();
       setAgents(list);
     })();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => { setTheme({ primary, ink }); }, [primary, ink, setTheme]);
 
+  // Option A: public-read bucket (`agency-logos`) with auth-only writes
   async function handleLogoFile(e) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Ensure bucket exists: 'agency-logos'
-    const fileName = `${Date.now()}_${file.name.replace(/\s+/g,'_')}`;
+    // basic validation
+    const okTypes = ["image/png","image/jpeg","image/svg+xml","image/webp"];
+    if (!okTypes.includes(file.type)) {
+      setMsg("Please upload PNG, JPG, SVG, or WEBP.");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setMsg("Max file size is 2MB.");
+      return;
+    }
+
+    const user = await getUser();
+    if (!user) {
+      setMsg("Not signed in.");
+      return;
+    }
+
+    const safeName = file.name.replace(/\s+/g, "_");
+    const path = `${user.id}/${Date.now()}_${safeName}`;
+
     const { data, error } = await supabase.storage
       .from("agency-logos")
-      .upload(fileName, file, { upsert: false });
-    if (error) return setMsg(error.message);
+      .upload(path, file, { upsert: false });
 
-    const { data: pub } = supabase.storage.from("agency-logos").getPublicUrl(data.path);
+    if (error) {
+      setMsg(error.message);
+      return;
+    }
+
+    const { data: pub } = supabase.storage
+      .from("agency-logos")
+      .getPublicUrl(data.path);
+
     setLogoUrl(pub.publicUrl);
     setMsg("Logo uploaded.");
   }
@@ -53,7 +79,7 @@ export default function AgencyConsole() {
   async function handleSave() {
     try {
       setSaving(true); setMsg("");
-      const saved = await upsertMyAgency({
+      await upsertMyAgency({
         name,
         slug,
         logo_url: logoUrl || null,
@@ -75,7 +101,7 @@ export default function AgencyConsole() {
           <span className="badge">Authenticated</span>
         </div>
 
-        {msg && <div className="sub" style={{ margin: "8px 0", color: msg.includes("Saved") ? "green" : "crimson" }}>{msg}</div>}
+        {msg && <div className="sub" style={{ margin: "8px 0", color: msg.toLowerCase().includes("saved") || msg.toLowerCase().includes("uploaded") ? "green" : "crimson" }}>{msg}</div>}
 
         <div className="grid grid-3" style={{ marginTop: 8 }}>
           {/* Brand */}
