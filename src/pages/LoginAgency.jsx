@@ -3,8 +3,6 @@ import { LogIn } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 
-const SUPER_ADMIN_EMAIL = (import.meta.env.VITE_SUPER_ADMIN_EMAIL || "jacobprieto@gmail.com").toLowerCase();
-
 export default function LoginAgency() {
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
@@ -12,6 +10,11 @@ export default function LoginAgency() {
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  async function isAdminEmail(emLower) {
+    const { data } = await supabase.from("admin_users").select("email").eq("email", emLower).maybeSingle();
+    return !!data;
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -23,14 +26,14 @@ export default function LoginAgency() {
       if (mode === "signup") {
         const { error } = await supabase.auth.signUp({ email: em, password: pass });
         if (error) throw error;
-        // user is signed in right away in email/password flow (unless confirm email is on)
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email: em, password: pass });
         if (error) throw error;
       }
 
-      if (em === SUPER_ADMIN_EMAIL) navigate("/super");
-      else navigate("/agency");
+      // route based on admin table (no more hardcode)
+      const admin = await isAdminEmail(em);
+      navigate(admin ? "/super" : "/agency");
     } catch (e) {
       setErr(e.message || String(e));
     } finally {
@@ -58,11 +61,7 @@ export default function LoginAgency() {
             <button className="btn btn-primary" type="submit" disabled={loading}>
               {loading ? "Please wait…" : mode === "login" ? "Login" : "Create account"}
             </button>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={()=>setMode(mode === "login" ? "signup" : "login")}
-            >
+            <button type="button" className="btn btn-ghost" onClick={()=>setMode(mode === "login" ? "signup" : "login")}>
               {mode === "login" ? "Need an account? Sign up" : "Have an account? Log in"}
             </button>
           </div>
@@ -72,7 +71,4 @@ export default function LoginAgency() {
   );
 }
 
-const input = {
-  width: "100%", border: "1px solid var(--border)", borderRadius: 10,
-  padding: "10px 12px", outline: "none", fontSize: 14,
-};
+const input = { width:"100%", border:"1px solid var(--border)", borderRadius:10, padding:"10px 12px", outline:"none", fontSize:14 };
