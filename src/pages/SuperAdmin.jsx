@@ -38,7 +38,7 @@ export default function SuperAdmin() {
     setLoading(true); setErr("");
     const { data, error } = await supabase
       .from("agencies")
-      .select("id, name, slug, logo_url, theme, suspended, created_at, agency_users(count)")
+      .select("id, name, slug, logo_url, theme, suspended, created_at, owner_user_id, pending_owner_email, agency_users(count)")
       .order("created_at", { ascending: false });
 
     if (error) setErr(error.message);
@@ -180,6 +180,44 @@ export default function SuperAdmin() {
     setMsg("Copied.");
   }
 
+  // ---- Owner onboarding helpers ----
+  async function sendOwnerMagicLink(email) {
+    setMsg("");
+    try {
+      const em = (email || "").trim().toLowerCase();
+      if (!em) throw new Error("No pending owner email on this agency.");
+      await supabase.auth.signInWithOtp({
+        email: em,
+        options: { emailRedirectTo: `${window.location.origin}/login/agency` }
+      });
+      setMsg(`Magic link sent to ${em}.`);
+    } catch (e) {
+      setMsg(e.message || String(e));
+    }
+  }
+
+  async function createOwnerInvite(agencyId) {
+    setMsg("");
+    try {
+      const { data: meRes } = await supabase.auth.getUser();
+      const code = makeCode(6);
+      const expires = new Date(Date.now() + 7 * 24*60*60*1000).toISOString();
+      const { error } = await supabase.from("invite_codes").insert({
+        agency_id: agencyId,
+        code,
+        role: "owner",
+        max_uses: 1,
+        expires_at: expires,
+        created_by: meRes?.user?.id || null
+      });
+      if (error) throw error;
+      setMsg("Owner invite created.");
+      await fetchInvites(agencyId);
+    } catch (e) {
+      setMsg(e.message || String(e));
+    }
+  }
+
   // ---- Admins tab: add/remove admin emails ----
   const [newAdminEmail, setNewAdminEmail] = useState("");
 
@@ -243,12 +281,12 @@ export default function SuperAdmin() {
           </div>
         </div>
 
-        {msg && <div className="sub" style={{ color: /saved|created|disabled|copied|removed|unsuspended|suspended/i.test(msg) ? "green" : "crimson", marginTop: 8 }}>{msg}</div>}
+        {msg && <div className="sub" style={{ color: /saved|created|disabled|copied|removed|unsuspended|suspended|sent|invite/i.test(msg) ? "green" : "crimson", marginTop: 8 }}>{msg}</div>}
         {err && <div className="sub" style={{ color: "crimson", marginTop: 8 }}>{err}</div>}
 
         {tab === "agencies" ? (
           <>
-            {/* Done-for-you provisioning card (updated per your requests) */}
+            {/* Done-for-you provisioning card */}
             <div className="card" style={{ marginTop: 12 }}>
               <div className="row" style={{ gap: 8 }}>
                 <strong>Provision Agency (Done-For-You)</strong>
@@ -292,7 +330,17 @@ export default function SuperAdmin() {
                           <td>{a.name}</td>
                           <td><code>{a.slug}</code></td>
                           <td className="row" style={{ gap: 6, alignItems: "center" }}><Users size={14}/>{count}</td>
-                          <td>{a.suspended ? <span className="badge" style={{ background: "#fee" }}>suspended</span> : <span className="badge">active</span>}</td>
+                          <td>
+                            {a.suspended ? (
+                              <span className="badge" style={{ background: "#fee" }}>suspended</span>
+                            ) : a.owner_user_id ? (
+                              <span className="badge">active</span>
+                            ) : a.pending_owner_email ? (
+                              <span className="badge" style={{ background: "#fff7e6", color: "#8a6100" }}>owner pending</span>
+                            ) : (
+                              <span className="badge" style={{ background: "#f4f4f5", color: "#555" }}>no owner</span>
+                            )}
+                          </td>
                           <td>{new Date(a.created_at).toLocaleDateString()}</td>
                           <td className="row" style={{ gap: 6, flexWrap: "wrap" }}>
                             <button className="btn btn-ghost" onClick={() => startEdit(a)} title="Edit"><Edit3 size={14}/></button>
@@ -338,6 +386,43 @@ export default function SuperAdmin() {
                     <input style={input} value={selected._edit.logo_url} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, logo_url:e.target.value}})} />
                     {selected._edit.logo_url && <div style={{ marginTop: 8 }}><img src={selected._edit.logo_url} alt="logo" style={{ maxHeight: 44 }}/></div>}
                   </div>
+                </div>
+
+                {/* Owner Onboarding */}
+                <div className="sep" />
+                <strong>Owner Onboarding</strong>
+                <div className="sub" style={{ marginTop: 6 }}>
+                  {selected.owner_user_id ? (
+                    <>Owner is assigned: <code>{selected.owner_user_id}</code></>
+                  ) : selected.pending_owner_email ? (
+                    <>Pending owner email: <strong>{selected.pending_owner_email}</strong></>
+                  ) : (
+                    <>No owner assigned and no pending owner email.</>
+                  )}
+                </div>
+
+                <div className="row" style={{ gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+                  <button
+                    className="btn btn-ghost"
+                    onClick={() => sendOwnerMagicLink(selected.pending_owner_email)}
+                    disabled={!selected?.pending_owner_email || !!selected?.owner_user_id}
+                    title="Email a login link to the pending owner"
+                  >
+                    Send owner magic link
+                  </button>
+
+                  <button
+                    className="btn btn-ghost"
+                    onClick={() => createOwnerInvite(selected.id)}
+                    disabled={!!selected?.owner_user_id}
+                    title="Generate an /login/agency invite link with owner role"
+                  >
+                    Create owner invite code
+                  </button>
+                </div>
+
+                <div className="sub" style={{ marginTop: 6 }}>
+                  After the owner logs in, your app calls <code>claim_agencies_for_me</code> and ownership is assigned automatically.
                 </div>
 
                 {/* Members */}
@@ -392,7 +477,8 @@ export default function SuperAdmin() {
                   <tbody>
                     {invites.length === 0 && <tr><td className="sub" colSpan="5">No invites</td></tr>}
                     {invites.map(inv => {
-                      const url = `${window.location.origin}/login/agent?code=${encodeURIComponent(inv.code)}`;
+                      const loginPath = inv.role === "owner" ? "/login/agency" : "/login/agent";
+                      const url = `${window.location.origin}${loginPath}?code=${encodeURIComponent(inv.code)}`;
                       return (
                         <tr key={inv.id}>
                           <td><code>{inv.code}</code></td>
