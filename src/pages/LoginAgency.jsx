@@ -11,27 +11,27 @@ export default function LoginAgency() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  function urlHasSupabaseTokens() {
-    // Supabase appends tokens as query or hash params on magic link flows
-    const href = window.location.href;
-    return /access_token=/.test(href) || /type=magiclink|type=recovery|token_type=/.test(href);
-  }
-
   async function isCurrentUserAdmin() {
     const { data, error } = await supabase.rpc("is_current_admin");
     return !!data && !error;
   }
 
-  // ⛑️ If a magic-link brought us here, forward to /welcome to set password & claim agency
+  // If a session already exists, bounce to /welcome immediately.
   useEffect(() => {
     (async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (session && urlHasSupabaseTokens()) {
-        navigate("/welcome", { replace: true });
-      }
+      if (session) navigate("/welcome", { replace: true });
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.key]);
+
+  // Also listen for a session that appears AFTER page load (magic link processed).
+  useEffect(() => {
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session) navigate("/welcome", { replace: true });
+    });
+    return () => { sub.subscription.unsubscribe(); };
+  }, [navigate]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -43,7 +43,7 @@ export default function LoginAgency() {
       const { error } = await supabase.auth.signInWithPassword({ email: em, password: pass });
       if (error) throw error;
 
-      // Safety net: claim any pending ownership on normal login too
+      // Safety net: claim pending ownership
       await supabase.rpc("claim_agencies_for_me").catch(() => {});
 
       const isAdmin = await isCurrentUserAdmin();
