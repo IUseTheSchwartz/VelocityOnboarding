@@ -12,7 +12,7 @@ export default function AgencyConsole() {
 
   // Branding
   const [name, setName] = useState("Your Agency");
-  const [slug, setSlug] = useState("your-agency");
+  const [slug, setSlug] = useState("your-agency"); // internal; auto from name
   const [primary, setPrimary] = useState(theme.primary);
   const [ink, setInk] = useState(theme.ink);
   const [logoUrl, setLogoUrl] = useState("");
@@ -21,14 +21,17 @@ export default function AgencyConsole() {
   const [agents, setAgents] = useState([]);
   const [invites, setInvites] = useState([]);
 
-  // New: Publishing + legal
+  // Publishing + legal + CTA
   const [isPublic, setIsPublic] = useState(false);
   const [publicSlug, setPublicSlug] = useState("your-agency");
   const [legalName, setLegalName] = useState("");
+  const [calendlyUrl, setCalendlyUrl] = useState("");
 
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [msg, setMsg] = useState("");
+
+  const normSlug = (s) => (s || "").trim().toLowerCase().replace(/\s+/g, "-");
 
   // 🚧 If the signed-in user is an admin, bounce them to /super
   useEffect(() => {
@@ -43,15 +46,16 @@ export default function AgencyConsole() {
       const a = await getCurrentAgency();
       if (a) {
         setName(a.name || "Your Agency");
-        setSlug(a.slug || "your-agency");
+        setSlug(a.slug || "your-agency"); // internal value (will be overwritten by name on save)
         setLogoUrl(a.logo_url || "");
         if (a.theme?.primary) setPrimary(a.theme.primary);
         if (a.theme?.ink) setInk(a.theme.ink);
         setTheme(a.theme || theme);
-        // New fields (safe defaults)
+
         setIsPublic(Boolean(a.is_public));
         setPublicSlug(a.public_slug || a.slug || "your-agency");
         setLegalName(a.legal_name || "");
+        setCalendlyUrl(a.calendly_url || "");
         await fetchInvites(a.id);
       }
       const list = await listAgentsForMyAgency();
@@ -158,19 +162,22 @@ export default function AgencyConsole() {
   async function handleSave() {
     try {
       setSaving(true); setMsg("");
-      // Default legal name if empty → PRIETO INSURANCE SOLUTIONS LLC
       const legal = (legalName || "PRIETO INSURANCE SOLUTIONS LLC").trim();
+      const slugFromName = normSlug(name) || slug || "your-agency";
+
       const payload = {
         name,
-        slug,
+        slug: slugFromName, // auto from name
         logo_url: logoUrl || null,
         theme: { primary, ink },
-        // new fields
         is_public: isPublic,
-        public_slug: (publicSlug || slug || "your-agency").toLowerCase(),
-        legal_name: legal
+        public_slug: (publicSlug || slugFromName || "your-agency").toLowerCase(),
+        legal_name: legal,
+        calendly_url: calendlyUrl || null
       };
+
       await upsertMyAgency(payload);
+      setSlug(slugFromName);
       setMsg("Saved agency settings.");
     } catch (e) {
       setMsg(String(e.message || e));
@@ -183,18 +190,23 @@ export default function AgencyConsole() {
     try {
       setPublishing(true); setMsg("");
       const legal = (legalName || "PRIETO INSURANCE SOLUTIONS LLC").trim();
-      const slugVal = (publicSlug || slug || "your-agency").toLowerCase().replace(/\s+/g, "-");
+      const slugFromName = normSlug(name) || slug || "your-agency";
+      const pubSlug = (publicSlug || slugFromName || "your-agency").toLowerCase().replace(/\s+/g, "-");
+
       await upsertMyAgency({
         name,
-        slug,
+        slug: slugFromName, // auto from name
         logo_url: logoUrl || null,
         theme: { primary, ink },
         is_public: true,
-        public_slug: slugVal,
-        legal_name: legal
+        public_slug: pubSlug,
+        legal_name: legal,
+        calendly_url: calendlyUrl || null
       });
+
       setIsPublic(true);
-      setPublicSlug(slugVal);
+      setPublicSlug(pubSlug);
+      setSlug(slugFromName);
       setMsg("Published! Your page is now public.");
     } catch (e) {
       setMsg(String(e.message || e));
@@ -203,7 +215,7 @@ export default function AgencyConsole() {
     }
   }
 
-  const publicUrl = `${window.location.origin}/a/${(publicSlug || slug || "your-agency")}`;
+  const publicUrl = `${window.location.origin}/a/${(publicSlug || normSlug(name) || "your-agency")}`;
 
   return (
     <section className="section">
@@ -226,8 +238,10 @@ export default function AgencyConsole() {
             <div className="sep" />
             <label>Agency Name</label>
             <input value={name} onChange={(e) => setName(e.target.value)} style={input} />
-            <label style={{ marginTop: 8 }}>Agency Slug (internal)</label>
-            <input value={slug} onChange={(e) => setSlug(e.target.value.replace(/\s+/g, '-').toLowerCase())} style={input} />
+            {/* Slug is auto from name */}
+            <div className="sub" style={{ marginTop: 6 }}>
+              Slug will be <code>{name ? normSlug(name) : slug || "your-agency"}</code>
+            </div>
 
             <div className="row" style={{ gap: 16, marginTop: 12, flexWrap: "wrap" }}>
               <ColorPicker label="Primary Color" value={primary} setValue={setPrimary} />
@@ -321,7 +335,7 @@ export default function AgencyConsole() {
             </table>
           </div>
 
-          {/* NEW: Public page controls */}
+          {/* Public page controls */}
           <div className="card" style={{ gridColumn: "1 / -1" }}>
             <div className="row" style={{ gap: 8 }}><LayoutDashboard size={16} /><strong>Public Recruiting Page</strong></div>
             <div className="sub" style={{ marginTop: 6 }}>
@@ -345,6 +359,14 @@ export default function AgencyConsole() {
               placeholder="my-agency"
             />
 
+            <label style={{ marginTop: 10 }}>Calendly URL (optional)</label>
+            <input
+              value={calendlyUrl}
+              onChange={(e) => setCalendlyUrl(e.target.value)}
+              style={input}
+              placeholder="https://calendly.com/your-link"
+            />
+
             <div className="sub" style={{ marginTop: 10 }}>
               Your page will be live at: <a href={publicUrl} target="_blank" rel="noreferrer">{publicUrl}</a>
             </div>
@@ -361,12 +383,12 @@ export default function AgencyConsole() {
 
             <div className="sep" style={{ marginTop: 12 }} />
 
-            <div className="sub" style={{ marginTop: 6 }}>Footer Legal Name (optional)</div>
+            <div className="sub" style={{ marginTop: 6 }}>LLC (optional)</div>
             <input
               value={legalName}
               onChange={(e) => setLegalName(e.target.value)}
               style={input}
-              placeholder="e.g., Your LLC Name"
+              placeholder="Your LLC (defaults to PRIETO INSURANCE SOLUTIONS LLC)"
             />
             <div className="sub" style={{ marginTop: 6 }}>
               If blank, it will default to <strong>PRIETO INSURANCE SOLUTIONS LLC</strong> on your public page.
@@ -377,7 +399,7 @@ export default function AgencyConsole() {
           <div className="card" style={{ gridColumn: "1 / -1" }}>
             <div className="row" style={{ gap: 8 }}><LayoutDashboard size={16} /><strong>Live Preview</strong></div>
             <div className="sep" />
-            <Preview name={name} logoUrl={logoUrl} primary={primary} ink={ink} legalName={legalName} />
+            <Preview name={name} logoUrl={logoUrl} primary={primary} ink={ink} legalName={legalName} calendlyUrl={calendlyUrl} />
           </div>
         </div>
       </div>
@@ -397,8 +419,9 @@ function ColorPicker({ label, value, setValue }) {
   );
 }
 
-function Preview({ name, logoUrl, primary, ink, legalName }) {
+function Preview({ name, logoUrl, primary, ink, legalName, calendlyUrl }) {
   const footerLegal = (legalName || "PRIETO INSURANCE SOLUTIONS LLC").trim();
+  const hasCalendly = !!(calendlyUrl && calendlyUrl.trim());
   return (
     <div style={{ border: "1px dashed var(--border)", borderRadius: 12, overflow: "hidden" }}>
       <div style={{ background: "#fff" }}>
@@ -410,7 +433,13 @@ function Preview({ name, logoUrl, primary, ink, legalName }) {
           <h3 style={{ margin: 0, color: ink }}>Join {name}</h3>
           <p className="sub" style={{ marginTop: 6 }}>Book a call and get onboarded fast.</p>
           <div className="row" style={{ marginTop: 12 }}>
-            <button className="btn" style={{ background: primary, color: "#fff" }}>Book a Call</button>
+            {hasCalendly ? (
+              <a className="btn" href={calendlyUrl} target="_blank" rel="noreferrer" style={{ background: primary, color: "#fff", textDecoration: "none" }}>
+                Book a Call
+              </a>
+            ) : (
+              <button className="btn" style={{ background: primary, color: "#fff" }}>Book a Call</button>
+            )}
             <button className="btn btn-ghost">Learn More</button>
           </div>
         </div>
