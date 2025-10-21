@@ -5,6 +5,8 @@ import {
   PauseCircle, PlayCircle, Trash2, UserMinus, UserCog, Plus, ClipboardCopy, Link2, Upload
 } from "lucide-react";
 
+const APP_URL = import.meta.env.VITE_APP_URL || window.location.origin;
+
 export default function SuperAdmin() {
   const [me, setMe] = useState(null);
   const [tab, setTab] = useState("agencies"); // agencies | admins
@@ -99,7 +101,7 @@ export default function SuperAdmin() {
     setInvites([]);
   }
 
-  async function saveAgency() {
+  async function saveAgency()() {
     if (!selected?._edit) return;
     setMsg("");
     const { name, slug, primary, ink, logo_url } = selected._edit;
@@ -188,7 +190,7 @@ export default function SuperAdmin() {
       if (!em) throw new Error("No pending owner email on this agency.");
       await supabase.auth.signInWithOtp({
         email: em,
-        options: { emailRedirectTo: `${window.location.origin}/login/agency` }
+        options: { emailRedirectTo: `${APP_URL}/welcome` }
       });
       setMsg(`Magic link sent to ${em}.`);
     } catch (e) {
@@ -265,20 +267,20 @@ export default function SuperAdmin() {
             <LayoutDashboard size={18}/> Super Admin
           </h2>
 
-          <div className="row" style={{ gap: 8, alignItems: "center" }}>
-            <button className={`btn ${tab==='agencies'?'btn-primary':'btn-ghost'}`} onClick={()=>setTab('agencies')}>Agencies</button>
-            <button className={`btn ${tab==='admins'?'btn-primary':'btn-ghost'}`} onClick={()=>setTab('admins')}>Admins</button>
+        <div className="row" style={{ gap: 8, alignItems: "center" }}>
+          <button className={`btn ${tab==='agencies'?'btn-primary':'btn-ghost'}`} onClick={()=>setTab('agencies')}>Agencies</button>
+          <button className={`btn ${tab==='admins'?'btn-primary':'btn-ghost'}`} onClick={()=>setTab('admins')}>Admins</button>
 
-            {tab === "agencies" && (
-              <>
-                <div className="row" style={{ gap: 8, alignItems: "center", background: "var(--panel)", padding: "6px 10px", borderRadius: 10, marginLeft: 8 }}>
-                  <Search size={14}/>
-                  <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search agencies…" style={{ border: "none", outline: "none", background: "transparent" }} />
-                </div>
-                <button className="btn btn-ghost" onClick={fetchAgencies} disabled={loading}><RefreshCw size={14}/> Refresh</button>
-              </>
-            )}
-          </div>
+          {tab === "agencies" && (
+            <>
+              <div className="row" style={{ gap: 8, alignItems: "center", background: "var(--panel)", padding: "6px 10px", borderRadius: 10, marginLeft: 8 }}>
+                <Search size={14}/>
+                <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search agencies…" style={{ border: "none", outline: "none", background: "transparent" }} />
+              </div>
+              <button className="btn btn-ghost" onClick={fetchAgencies} disabled={loading}><RefreshCw size={14}/> Refresh</button>
+            </>
+          )}
+        </div>
         </div>
 
         {msg && <div className="sub" style={{ color: /saved|created|disabled|copied|removed|unsuspended|suspended|sent|invite/i.test(msg) ? "green" : "crimson", marginTop: 8 }}>{msg}</div>}
@@ -286,7 +288,7 @@ export default function SuperAdmin() {
 
         {tab === "agencies" ? (
           <>
-            {/* Done-for-you provisioning card */}
+            {/* Provision card */}
             <div className="card" style={{ marginTop: 12 }}>
               <div className="row" style={{ gap: 8 }}>
                 <strong>Provision Agency (Done-For-You)</strong>
@@ -540,7 +542,7 @@ function Section({ children }) {
   return <section className="section"><div className="container">{children}</div></section>;
 }
 
-/* -------------------- UPDATED Provision form component -------------------- */
+/* -------------------- Provision form component -------------------- */
 
 function ProvisionAgencyForm() {
   const [email, setEmail] = useState("");
