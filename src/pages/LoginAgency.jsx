@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { LogIn } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 
 export default function LoginAgency() {
@@ -9,11 +9,29 @@ export default function LoginAgency() {
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  function urlHasSupabaseTokens() {
+    // Supabase appends tokens as query or hash params on magic link flows
+    const href = window.location.href;
+    return /access_token=/.test(href) || /type=magiclink|type=recovery|token_type=/.test(href);
+  }
 
   async function isCurrentUserAdmin() {
     const { data, error } = await supabase.rpc("is_current_admin");
     return !!data && !error;
   }
+
+  // ⛑️ If a magic-link brought us here, forward to /welcome to set password & claim agency
+  useEffect(() => {
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session && urlHasSupabaseTokens()) {
+        navigate("/welcome", { replace: true });
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -22,14 +40,12 @@ export default function LoginAgency() {
     const em = (email || "").trim().toLowerCase();
 
     try {
-      // Login
       const { error } = await supabase.auth.signInWithPassword({ email: em, password: pass });
       if (error) throw error;
 
-      // NEW: Auto-claim any pre-provisioned agencies for this email
-      try { await supabase.rpc("claim_agencies_for_me"); } catch (_) {}
+      // Safety net: claim any pending ownership on normal login too
+      await supabase.rpc("claim_agencies_for_me").catch(() => {});
 
-      // Route: Super if admin, else Agency console
       const isAdmin = await isCurrentUserAdmin();
       navigate(isAdmin ? "/super" : "/agency");
     } catch (e) {
@@ -62,7 +78,7 @@ export default function LoginAgency() {
           </div>
 
           <div className="sub" style={{ marginTop: 10 }}>
-            Don’t have access? Ask a Super Admin to provision your agency or send an owner invite link.
+            Don’t have access? Ask a Super Admin to send you an owner invitation/magic link.
           </div>
         </form>
       </div>
