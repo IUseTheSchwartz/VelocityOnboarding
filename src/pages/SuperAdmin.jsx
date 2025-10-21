@@ -2,10 +2,10 @@ import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import {
   LayoutDashboard, Users, Search, RefreshCw, ShieldAlert, Edit3, Save, X,
-  PauseCircle, PlayCircle, Trash2, UserMinus, UserCog, Plus, ClipboardCopy, Link2, Upload
+  PauseCircle, PlayCircle, Trash2, UserMinus, UserCog, Plus, ClipboardCopy, Upload
 } from "lucide-react";
 
-const APP_URL = import.meta.env.VITE_APP_URL || window.location.origin;
+const APP_URL = import.meta.env.VITE_APP_URL || window.location.origin; // kept if you reuse later
 const SUPER = (import.meta.env.VITE_SUPER_ADMIN_EMAIL || "").toLowerCase();
 
 export default function SuperAdmin() {
@@ -205,44 +205,6 @@ export default function SuperAdmin() {
     setMsg("Copied.");
   }
 
-  // ---- Owner onboarding helpers ----
-  async function sendOwnerMagicLink(email) {
-    setMsg("");
-    try {
-      const em = (email || "").trim().toLowerCase();
-      if (!em) throw new Error("No pending owner email on this agency.");
-      await supabase.auth.signInWithOtp({
-        email: em,
-        options: { emailRedirectTo: `${APP_URL}/welcome` }
-      });
-      setMsg(`Magic link sent to ${em}.`);
-    } catch (e) {
-      setMsg(e.message || String(e));
-    }
-  }
-
-  async function createOwnerInvite(agencyId) {
-    setMsg("");
-    try {
-      const { data: meRes } = await supabase.auth.getUser();
-      const code = makeCode(6);
-      const expires = new Date(Date.now() + 7 * 24*60*60*1000).toISOString();
-      const { error } = await supabase.from("invite_codes").insert({
-        agency_id: agencyId,
-        code,
-        role: "owner",
-        max_uses: 1,
-        expires_at: expires,
-        created_by: meRes?.user?.id || null
-      });
-      if (error) throw error;
-      setMsg("Owner invite created.");
-      await fetchInvites(agencyId);
-    } catch (e) {
-      setMsg(e.message || String(e));
-    }
-  }
-
   // --- Gate renders ---
   if (!adminCheckDone) return <Section><div className="sub">Checking access…</div></Section>;
   if (!uiAdmin) {
@@ -280,7 +242,7 @@ export default function SuperAdmin() {
           </div>
         </div>
 
-        {msg && <div className="sub" style={{ color: /saved|created|disabled|copied|removed|unsuspended|suspended|sent|invite/i.test(msg) ? "green" : "crimson", marginTop: 8 }}>{msg}</div>}
+        {msg && <div className="sub" style={{ color: /saved|created|disabled|copied|removed|unsuspended|suspended/i.test(msg) ? "green" : "crimson", marginTop: 8 }}>{msg}</div>}
         {err && <div className="sub" style={{ color: "crimson", marginTop: 8 }}>{err}</div>}
 
         {tab === "agencies" ? (
@@ -387,43 +349,6 @@ export default function SuperAdmin() {
                   </div>
                 </div>
 
-                {/* Owner Onboarding */}
-                <div className="sep" />
-                <strong>Owner Onboarding</strong>
-                <div className="sub" style={{ marginTop: 6 }}>
-                  {selected.owner_user_id ? (
-                    <>Owner is assigned: <code>{selected.owner_user_id}</code></>
-                  ) : selected.pending_owner_email ? (
-                    <>Pending owner email: <strong>{selected.pending_owner_email}</strong></>
-                  ) : (
-                    <>No owner assigned and no pending owner email.</>
-                  )}
-                </div>
-
-                <div className="row" style={{ gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-                  <button
-                    className="btn btn-ghost"
-                    onClick={() => sendOwnerMagicLink(selected.pending_owner_email)}
-                    disabled={!selected?.pending_owner_email || !!selected?.owner_user_id}
-                    title="Email a login link to the pending owner"
-                  >
-                    Send owner magic link
-                  </button>
-
-                  <button
-                    className="btn btn-ghost"
-                    onClick={() => createOwnerInvite(selected.id)}
-                    disabled={!!selected?.owner_user_id}
-                    title="Generate an /login/agency invite link with owner role"
-                  >
-                    Create owner invite code
-                  </button>
-                </div>
-
-                <div className="sub" style={{ marginTop: 6 }}>
-                  After the owner logs in, your app calls <code>claim_agencies_for_me</code> and ownership is assigned automatically.
-                </div>
-
                 {/* Members */}
                 <div className="sep" />
                 <strong>Members</strong>
@@ -453,7 +378,7 @@ export default function SuperAdmin() {
                   </tbody>
                 </table>
 
-                {/* Invites (role, uses, expiry; copy/open/disable) */}
+                {/* Invite Codes (create/copy/disable) */}
                 <div className="sep" />
                 <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
                   <strong>Invite Codes</strong>
@@ -476,8 +401,6 @@ export default function SuperAdmin() {
                   <tbody>
                     {invites.length === 0 && <tr><td className="sub" colSpan="5">No invites</td></tr>}
                     {invites.map(inv => {
-                      const loginPath = inv.role === "owner" ? "/login/agency" : "/login/agent";
-                      const url = `${window.location.origin}${loginPath}?code=${encodeURIComponent(inv.code)}`;
                       return (
                         <tr key={inv.id}>
                           <td><code>{inv.code}</code></td>
@@ -485,13 +408,11 @@ export default function SuperAdmin() {
                           <td><span className="badge">{inv.status}</span></td>
                           <td>{inv.expires_at ? new Date(inv.expires_at).toLocaleString() : "—"}</td>
                           <td className="row" style={{ gap: 6 }}>
-                            <button className="btn btn-ghost" onClick={()=>copy(url)} title="Copy signup link"><ClipboardCopy size={14}/> Copy</button>
+                            {/* Copy CODE only (no URLs) */}
+                            <button className="btn btn-ghost" onClick={()=>copy(inv.code)} title="Copy invite code"><ClipboardCopy size={14}/> Copy code</button>
                             {inv.status === "active" && (
                               <button className="btn btn-ghost" onClick={()=>disableInvite(inv.id, selected.id)} title="Disable"><Trash2 size={14}/> Disable</button>
                             )}
-                            <a className="btn btn-ghost" href={url} target="_blank" rel="noreferrer" title="Open link">
-                              <Link2 size={14}/> Open
-                            </a>
                           </td>
                         </tr>
                       );
@@ -503,31 +424,7 @@ export default function SuperAdmin() {
           </>
         ) : (
           <div className="card" style={{ marginTop: 12 }}>
-            <div className="row" style={{ gap: 8, alignItems: "center" }}>
-              <input
-                placeholder="new-admin@email.com"
-                value={newAdminEmail}
-                onChange={(e)=>setNewAdminEmail(e.target.value)}
-                style={input}
-              />
-              <button className="btn btn-primary" onClick={addAdmin}><Plus size={14}/> Add admin</button>
-            </div>
-            <div className="sep" />
-            <table className="table">
-              <thead><tr><th>Email</th><th>Added</th><th>Actions</th></tr></thead>
-              <tbody>
-                {admins.length === 0 && <tr><td className="sub" colSpan="3">No admins yet</td></tr>}
-                {admins.map(a => (
-                  <tr key={a.email}>
-                    <td>{a.email}</td>
-                    <td>{new Date(a.created_at).toLocaleString()}</td>
-                    <td>
-                      <button className="btn btn-ghost" onClick={()=>removeAdmin(a.email)}><Trash2 size={14}/> Remove</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <AdminsTab />
           </div>
         )}
       </div>
@@ -537,6 +434,75 @@ export default function SuperAdmin() {
 
 function Section({ children }) {
   return <section className="section"><div className="container">{children}</div></section>;
+}
+
+/* -------------------- Admins tab -------------------- */
+function AdminsTab() {
+  const [admins, setAdmins] = useState([]);
+  const [newAdminEmail, setNewAdminEmail] = useState("");
+  const [msg, setMsg] = useState("");
+
+  async function fetchAdmins() {
+    const { data, error } = await supabase
+      .from("admin_users")
+      .select("email, created_at")
+      .order("created_at", { ascending: false });
+    if (!error) setAdmins(data || []);
+  }
+
+  useEffect(() => { fetchAdmins(); }, []);
+
+  async function addAdmin() {
+    setMsg("");
+    const email = (newAdminEmail || "").trim().toLowerCase();
+    if (!email) return;
+    const { error } = await supabase.from("admin_users").insert({ email });
+    if (error) return setMsg(error.message);
+    setNewAdminEmail("");
+    setMsg("Admin added.");
+    await fetchAdmins();
+  }
+
+  async function removeAdmin(email) {
+    setMsg("");
+    const me = (await supabase.auth.getUser())?.data?.user?.email?.toLowerCase();
+    if (email === (me || "")) return setMsg("You can’t remove yourself.");
+    const { error } = await supabase.from("admin_users").delete().eq("email", email);
+    if (error) return setMsg(error.message);
+    setMsg("Admin removed.");
+    await fetchAdmins();
+  }
+
+  return (
+    <>
+      {msg && <div className="sub" style={{ color: /added|removed/i.test(msg) ? "green" : "crimson" }}>{msg}</div>}
+      <div className="row" style={{ gap: 8, alignItems: "center" }}>
+        <input
+          placeholder="new-admin@email.com"
+          value={newAdminEmail}
+          onChange={(e)=>setNewAdminEmail(e.target.value)}
+          style={input}
+        />
+        <button className="btn btn-primary" onClick={addAdmin}><Plus size={14}/> Add admin</button>
+      </div>
+      <div className="sep" />
+      <table className="table">
+        <thead><tr><th>Email</th><th>Added</th><th>Actions</th></tr></thead>
+        <tbody>
+          {admins.length === 0 && <tr><td className="sub" colSpan="3">No admins yet</td></tr>}
+          {admins.map(a => (
+            <tr key={a.email}>
+              <td>{a.email}</td>
+              <td>{new Date(a.created_at).toLocaleString()}</td>
+              <td>
+                <button className="btn btn-ghost" onClick={()=>removeAdmin(a.email)}><Trash2 size={14}/> Remove</button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  );
 }
 
 /* -------------------- Provision form component -------------------- */
