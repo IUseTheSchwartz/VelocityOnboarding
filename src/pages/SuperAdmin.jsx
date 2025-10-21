@@ -5,6 +5,7 @@ import {
   LayoutDashboard, Users, Search, RefreshCw, ShieldAlert, Edit3, Save, X,
   PauseCircle, PlayCircle, Trash2, UserMinus, UserCog, Plus, ClipboardCopy, Upload
 } from "lucide-react";
+import { normalizeTheme } from "../theme";
 
 const SUPER = (import.meta.env.VITE_SUPER_ADMIN_EMAIL || "").toLowerCase();
 
@@ -94,14 +95,29 @@ export default function SuperAdmin() {
 
   // ---- Agencies: edit/save/suspend ----
   function startEdit(agency) {
+    const t = normalizeTheme(agency.theme || {});
     setSelected({
       ...agency,
       _edit: {
         name: agency.name,
         slug: agency.slug,
-        primary: agency.theme?.primary || "#1E63F0",
-        ink: agency.theme?.ink || "#0B1535",
-        logo_url: agency.logo_url || ""
+        logo_url: agency.logo_url || "",
+        // Theme v2
+        primary: t.primary,
+        primaryContrast: t.primaryContrast,
+        accent: t.accent,
+        accentContrast: t.accentContrast,
+        ink: t.ink,
+        muted: t.muted,
+        bg: t.bg,
+        surface: t.surface,
+        card: t.card,
+        border: t.border,
+        mode: t.mode,
+        heroPattern: t.heroPattern,
+        heroTint: t.heroTint,
+        radius: t.radius,
+        elev: t.elev
       }
     });
     fetchMembers(agency.id);
@@ -118,11 +134,29 @@ export default function SuperAdmin() {
   async function saveAgency() {
     if (!selected?._edit) return;
     setMsg("");
-    const { name, slug, primary, ink, logo_url } = selected._edit;
+    const {
+      name, slug, logo_url,
+      primary, primaryContrast,
+      accent, accentContrast,
+      ink, muted,
+      bg, surface, card, border,
+      mode, heroPattern, heroTint, radius, elev
+    } = selected._edit;
+
     const { error } = await supabase
       .from("agencies")
-      .update({ name, slug, theme: { primary, ink }, logo_url })
+      .update({
+        name, slug, logo_url,
+        theme: {
+          primary, primaryContrast,
+          accent, accentContrast,
+          ink, muted,
+          bg, surface, card, border,
+          mode, heroPattern, heroTint, radius, elev
+        }
+      })
       .eq("id", selected.id);
+
     if (error) return setMsg(error.message);
     setMsg("Saved agency.");
     await fetchAgencies();
@@ -157,7 +191,7 @@ export default function SuperAdmin() {
     await fetchMembers(agencyId);
   }
 
-  // ---- Invite making (now via RPC) ----
+  // ---- Invite making (via RPC) ----
   function copy(text) {
     navigator.clipboard.writeText(text);
     setMsg("Copied.");
@@ -332,29 +366,69 @@ export default function SuperAdmin() {
                       value={selected._edit.slug}
                       onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, slug:e.target.value.replace(/\s+/g,'-').toLowerCase()}})}
                     />
-                  </div>
-                  <div>
-                    <label>Primary</label>
-                    <input
-                      style={input}
-                      value={selected._edit.primary}
-                      onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, primary:e.target.value}})}
-                    />
-                    <label style={{ marginTop: 8 }}>Heading Color</label>
-                    <input
-                      style={input}
-                      value={selected._edit.ink}
-                      onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, ink:e.target.value}})}
-                    />
-                  </div>
-                  <div>
-                    <label>Logo URL</label>
+                    <label style={{ marginTop: 8 }}>Logo URL</label>
                     <input
                       style={input}
                       value={selected._edit.logo_url}
                       onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, logo_url:e.target.value}})}
                     />
                     {selected._edit.logo_url && <div style={{ marginTop: 8 }}><img src={selected._edit.logo_url} alt="logo" style={{ maxHeight: 44 }}/></div>}
+                  </div>
+
+                  <div>
+                    <label>Primary</label>
+                    <input style={input} value={selected._edit.primary} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, primary:e.target.value}})} />
+                    <label style={{ marginTop: 8 }}>Primary Contrast</label>
+                    <input style={input} value={selected._edit.primaryContrast} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, primaryContrast:e.target.value}})} />
+                    <label style={{ marginTop: 8 }}>Accent</label>
+                    <input style={input} value={selected._edit.accent} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, accent:e.target.value}})} />
+                    <label style={{ marginTop: 8 }}>Accent Contrast</label>
+                    <input style={input} value={selected._edit.accentContrast} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, accentContrast:e.target.value}})} />
+                  </div>
+
+                  <div>
+                    <label>Ink (Headings)</label>
+                    <input style={input} value={selected._edit.ink} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, ink:e.target.value}})} />
+                    <label style={{ marginTop: 8 }}>Muted Text</label>
+                    <input style={input} value={selected._edit.muted} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, muted:e.target.value}})} />
+                    <label style={{ marginTop: 8 }}>Border</label>
+                    <input style={input} value={selected._edit.border} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, border:e.target.value}})} />
+                  </div>
+                </div>
+
+                <div className="grid grid-3" style={{ marginTop: 8 }}>
+                  <div>
+                    <label>Background</label>
+                    <input style={input} value={selected._edit.bg} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, bg:e.target.value}})} />
+                    <label style={{ marginTop: 8 }}>Surface</label>
+                    <input style={input} value={selected._edit.surface} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, surface:e.target.value}})} />
+                    <label style={{ marginTop: 8 }}>Card</label>
+                    <input style={input} value={selected._edit.card} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, card:e.target.value}})} />
+                  </div>
+
+                  <div>
+                    <label>Mode</label>
+                    <select className="btn btn-ghost" value={selected._edit.mode} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, mode:e.target.value}})}>
+                      <option>light</option><option>dark</option>
+                    </select>
+                    <label style={{ marginTop: 8 }}>Elevation</label>
+                    <select className="btn btn-ghost" value={selected._edit.elev} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, elev:e.target.value}})}>
+                      <option>none</option><option>soft</option><option>lifted</option>
+                    </select>
+                    <label style={{ marginTop: 8 }}>Radius (px)</label>
+                    <input type="number" min={6} max={24} className="btn btn-ghost" value={selected._edit.radius}
+                           onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, radius: Number(e.target.value)}})} />
+                  </div>
+
+                  <div>
+                    <label>Hero Pattern</label>
+                    <select className="btn btn-ghost" value={selected._edit.heroPattern} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, heroPattern:e.target.value}})}>
+                      <option>none</option><option>grid</option><option>dots</option><option>gradient</option>
+                    </select>
+                    <label style={{ marginTop: 8 }}>Hero Tint</label>
+                    <input type="range" min="0" max="0.6" step="0.05" value={selected._edit.heroTint}
+                           onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, heroTint: Number(e.target.value)}})} />
+                    <div className="sub">{selected._edit.heroTint}</div>
                   </div>
                 </div>
 
@@ -600,7 +674,7 @@ function ProvisionAgencyForm() {
     setLoading(true);
 
     const slug = normSlug(name);
-    const theme = { primary, ink };
+    const theme = { primary, ink }; // Starter theme; owners can expand later
 
     const { data, error } = await supabase.rpc("admin_upsert_agency", {
       p_owner_email: (email || "").trim().toLowerCase(),
