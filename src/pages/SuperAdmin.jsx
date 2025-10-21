@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import {
   LayoutDashboard, Users, Search, RefreshCw, ShieldAlert, Edit3, Save, X,
-  PauseCircle, PlayCircle, Trash2, UserMinus, UserCog, Plus, ClipboardCopy, Link2
+  PauseCircle, PlayCircle, Trash2, UserMinus, UserCog, Plus, ClipboardCopy, Link2, Upload
 } from "lucide-react";
 
 export default function SuperAdmin() {
@@ -248,7 +248,7 @@ export default function SuperAdmin() {
 
         {tab === "agencies" ? (
           <>
-            {/* NEW: Done-for-you provisioning card */}
+            {/* Done-for-you provisioning card (updated per your requests) */}
             <div className="card" style={{ marginTop: 12 }}>
               <div className="row" style={{ gap: 8 }}>
                 <strong>Provision Agency (Done-For-You)</strong>
@@ -454,21 +454,23 @@ function Section({ children }) {
   return <section className="section"><div className="container">{children}</div></section>;
 }
 
-/* -------------------- NEW: Provision form component -------------------- */
+/* -------------------- UPDATED Provision form component -------------------- */
 
 function ProvisionAgencyForm() {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
-  const [legal, setLegal] = useState("");
+  const [llc, setLLC] = useState("");
   const [calendly, setCalendly] = useState("");
-  const [logoUrl, setLogoUrl] = useState("");
 
+  // theme + visibility
   const [primary, setPrimary] = useState("#1e63f0");
   const [ink, setInk] = useState("#0b1220");
   const [isPublic, setIsPublic] = useState(false);
   const [publicSlug, setPublicSlug] = useState("");
 
+  // logo upload
+  const [logoUrl, setLogoUrl] = useState("");
+  const [logoUploading, setLogoUploading] = useState(false);
   const [out, setOut] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -476,23 +478,62 @@ function ProvisionAgencyForm() {
     return (s || "").trim().toLowerCase().replace(/\s+/g, "-");
   }
 
+  async function handleLogoUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const okTypes = ["image/png", "image/jpeg", "image/svg+xml", "image/webp"];
+    if (!okTypes.includes(file.type)) {
+      setOut("Please upload PNG, JPG, SVG, or WEBP.");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setOut("Max file size is 2MB.");
+      return;
+    }
+
+    setOut("");
+    setLogoUploading(true);
+    try {
+      const { data: userRes } = await supabase.auth.getUser();
+      const uid = userRes?.user?.id || "superadmin";
+      const safe = file.name.replace(/\s+/g, "_");
+      const path = `${uid}/${Date.now()}_${safe}`;
+
+      const { data, error } = await supabase.storage
+        .from("agency-logos")
+        .upload(path, file, { upsert: false });
+
+      if (error) throw error;
+
+      const { data: pub } = supabase.storage.from("agency-logos").getPublicUrl(data.path);
+      setLogoUrl(pub.publicUrl);
+      setOut("Logo uploaded.");
+    } catch (err) {
+      setOut(err.message || String(err));
+    } finally {
+      setLogoUploading(false);
+    }
+  }
+
   async function handleProvision(e) {
     e.preventDefault();
     setOut("");
     setLoading(true);
 
+    const slug = normSlug(name);
     const theme = { primary, ink };
 
     const { data, error } = await supabase.rpc("admin_upsert_agency", {
-      p_owner_email: email.trim(),
+      p_owner_email: (email || "").trim().toLowerCase(),
       p_name: name.trim(),
-      p_slug: normSlug(slug || name),
+      p_slug: slug, // auto from name
       p_logo_url: logoUrl || null,
       p_theme: theme,
-      p_legal_name: legal || null,
+      p_legal_name: llc || null,               // label "LLC", maps to legal_name
       p_calendly_url: calendly || null,
       p_is_public: isPublic,
-      p_public_slug: normSlug(publicSlug || slug || name),
+      p_public_slug: normSlug(publicSlug || slug),
     });
 
     setLoading(false);
@@ -522,17 +563,10 @@ function ProvisionAgencyForm() {
         value={name}
         onChange={(e) => setName(e.target.value)}
         style={input}
-        placeholder="Acme Insurance"
+        placeholder="Velocity Financial"
         required
       />
-
-      <label style={{ marginTop: 4 }}>Slug</label>
-      <input
-        value={slug}
-        onChange={(e) => setSlug(e.target.value)}
-        style={input}
-        placeholder="acme-insurance"
-      />
+      <div className="sub">Slug will be <code>{name ? name.trim().toLowerCase().replace(/\s+/g, "-") : "…"}</code></div>
 
       <div className="row" style={{ gap: 10, flexWrap: "wrap", marginTop: 6 }}>
         <div>
@@ -545,18 +579,21 @@ function ProvisionAgencyForm() {
         </div>
       </div>
 
-      <label style={{ marginTop: 4 }}>Logo URL (optional)</label>
-      <input
-        value={logoUrl}
-        onChange={(e) => setLogoUrl(e.target.value)}
-        style={input}
-        placeholder="https://…"
-      />
+      {/* Logo file upload */}
+      <div>
+        <div className="sub" style={{ marginBottom: 6 }}>Logo</div>
+        <label className="btn btn-ghost" style={{ display: "inline-flex", gap: 8, alignItems: "center", cursor: "pointer" }}>
+          <Upload size={16} /> {logoUploading ? "Uploading…" : "Upload logo"}
+          <input type="file" accept="image/*" onChange={handleLogoUpload} style={{ display: "none" }} />
+        </label>
+        {logoUrl && <div style={{ marginTop: 8 }}><img src={logoUrl} alt="logo preview" style={{ maxHeight: 44 }} /></div>}
+      </div>
 
-      <label style={{ marginTop: 4 }}>Legal Name (optional)</label>
+      {/* LLC name */}
+      <label style={{ marginTop: 4 }}>LLC (optional)</label>
       <input
-        value={legal}
-        onChange={(e) => setLegal(e.target.value)}
+        value={llc}
+        onChange={(e) => setLLC(e.target.value)}
         style={input}
         placeholder="Your LLC (defaults to PRIETO INSURANCE SOLUTIONS LLC)"
       />
@@ -579,17 +616,17 @@ function ProvisionAgencyForm() {
         value={publicSlug}
         onChange={(e) => setPublicSlug(e.target.value)}
         style={input}
-        placeholder="acme"
+        placeholder="velocity-financial"
       />
 
       <div className="row" style={{ gap: 8, marginTop: 8 }}>
-        <button className="btn btn-primary" disabled={loading}>
+        <button className="btn btn-primary" disabled={loading || logoUploading}>
           {loading ? "Provisioning…" : "Provision Agency"}
         </button>
       </div>
 
       {out && (
-        <div className="sub" style={{ color: /assigned|pending/i.test(out) ? "green" : "crimson" }}>
+        <div className="sub" style={{ color: /assigned|pending|uploaded/i.test(out) ? "green" : "crimson" }}>
           {out}
         </div>
       )}
