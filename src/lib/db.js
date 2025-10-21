@@ -1,3 +1,4 @@
+// src/lib/db.js
 import { supabase } from "./supabaseClient";
 
 /** returns { user, profile-like } from session */
@@ -39,23 +40,31 @@ export async function getCurrentAgency() {
   return ag?.[0] ?? null;
 }
 
-/** Upsert agency owned by current user (owner) */
-export async function upsertMyAgency({ name, slug, logo_url, theme }) {
+/**
+ * Upsert the current user's agency by the canonical unique column: slug.
+ * Accepts all branding/public fields used by AgencyConsole.
+ */
+export async function upsertMyAgency(payload) {
   const user = await getUser();
   if (!user) throw new Error("Not authenticated");
 
-  // upsert by owner_user_id OR slug uniqueness
+  // Normalize and build the row
+  const row = {
+    owner_user_id: user.id,
+    name: payload.name,
+    slug: payload.slug,                         // must be unique; caller ensures normalization
+    logo_url: payload.logo_url ?? null,
+    theme: payload.theme ?? null,               // { primary, ink }
+    is_public: payload.is_public ?? false,
+    public_slug: payload.public_slug || null,   // can be null if not public
+    legal_name: payload.legal_name ?? null,
+    calendly_url: payload.calendly_url ?? null,
+  };
+
+  // Upsert by slug (the real unique constraint)
   const { data, error } = await supabase
     .from("agencies")
-    .upsert({
-      owner_user_id: user.id,
-      name,
-      slug,
-      logo_url: logo_url ?? null,
-      theme,
-    }, {
-      onConflict: "owner_user_id"
-    })
+    .upsert(row, { onConflict: "slug", ignoreDuplicates: false })
     .select("*")
     .single();
 
