@@ -1,7 +1,7 @@
 // src/pages/AgencyConsole.jsx
 import React, { useEffect, useState } from "react";
 import { Settings2, Users, Film, LayoutDashboard, Upload, ClipboardCopy, Ban } from "lucide-react";
-import { useTheme } from "../theme";
+import { useTheme, normalizeTheme } from "../theme";
 import { supabase } from "../lib/supabaseClient";
 import { getUser, getCurrentAgency, listAgentsForMyAgency, upsertMyAgency } from "../lib/db";
 import { useNavigate } from "react-router-dom";
@@ -10,12 +10,27 @@ export default function AgencyConsole() {
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
 
-  // Branding
+  // Branding (name/slug/logo)
   const [name, setName] = useState("Your Agency");
   const [slug, setSlug] = useState("your-agency"); // internal; auto from name
-  const [primary, setPrimary] = useState(theme.primary);
-  const [ink, setInk] = useState(theme.ink);
   const [logoUrl, setLogoUrl] = useState("");
+
+  // Theme v2 tokens
+  const [primary, setPrimary] = useState(theme.primary);
+  const [primaryContrast, setPrimaryContrast] = useState(theme.primaryContrast || "#ffffff");
+  const [accent, setAccent] = useState(theme.accent || "#22c55e");
+  const [accentContrast, setAccentContrast] = useState(theme.accentContrast || "#0b1220");
+  const [ink, setInk] = useState(theme.ink);
+  const [muted, setMuted] = useState(theme.muted || "#6b7280");
+  const [bg, setBg] = useState(theme.bg || "#ffffff");
+  const [surface, setSurface] = useState(theme.surface || "#ffffff");
+  const [card, setCard] = useState(theme.card || "#ffffff");
+  const [border, setBorder] = useState(theme.border || "#e5e7eb");
+  const [mode, setMode] = useState(theme.mode || "light");               // "light" | "dark"
+  const [heroPattern, setHeroPattern] = useState(theme.heroPattern || "grid"); // "none" | "grid" | "dots" | "gradient"
+  const [heroTint, setHeroTint] = useState(theme.heroTint ?? 0.2);       // 0–0.6
+  const [radius, setRadius] = useState(theme.radius ?? 12);              // 6–24
+  const [elev, setElev] = useState(theme.elev || "soft");                // "none" | "soft" | "lifted"
 
   // Team/Invites
   const [agents, setAgents] = useState([]);
@@ -46,11 +61,18 @@ export default function AgencyConsole() {
       const a = await getCurrentAgency();
       if (a) {
         setName(a.name || "Your Agency");
-        setSlug(a.slug || "your-agency"); // internal value (will be overwritten by name on save)
+        setSlug(a.slug || "your-agency");
         setLogoUrl(a.logo_url || "");
-        if (a.theme?.primary) setPrimary(a.theme.primary);
-        if (a.theme?.ink) setInk(a.theme.ink);
-        setTheme(a.theme || theme);
+
+        // hydrate Theme v2 safely
+        const t = normalizeTheme(a.theme || {});
+        setPrimary(t.primary); setPrimaryContrast(t.primaryContrast);
+        setAccent(t.accent); setAccentContrast(t.accentContrast);
+        setInk(t.ink); setMuted(t.muted);
+        setBg(t.bg); setSurface(t.surface); setCard(t.card); setBorder(t.border);
+        setMode(t.mode); setHeroPattern(t.heroPattern); setHeroTint(t.heroTint);
+        setRadius(t.radius); setElev(t.elev);
+        setTheme(t);
 
         setIsPublic(Boolean(a.is_public));
         setPublicSlug(a.public_slug || a.slug || "your-agency");
@@ -64,7 +86,16 @@ export default function AgencyConsole() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => { setTheme({ primary, ink }); }, [primary, ink, setTheme]);
+  // keep live preview in sync with context
+  useEffect(() => {
+    setTheme({
+      primary, primaryContrast,
+      accent, accentContrast,
+      ink, muted,
+      bg, surface, card, border,
+      mode, heroPattern, heroTint, radius, elev
+    });
+  }, [primary, primaryContrast, accent, accentContrast, ink, muted, bg, surface, card, border, mode, heroPattern, heroTint, radius, elev, setTheme]);
 
   // ------- Invites --------
   async function fetchInvites(agencyId) {
@@ -78,7 +109,7 @@ export default function AgencyConsole() {
   }
 
   function makeCode(len = 6) {
-    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // avoid similar chars
+    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     return Array.from({ length: len }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
   }
 
@@ -120,7 +151,7 @@ export default function AgencyConsole() {
     setMsg("Copied to clipboard.");
   }
 
-  // ------- Logo upload (public bucket) --------
+  // ------- Logo upload --------
   async function handleLogoFile(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -136,10 +167,7 @@ export default function AgencyConsole() {
     }
 
     const user = await getUser();
-    if (!user) {
-      setMsg("Not signed in.");
-      return;
-    }
+    if (!user) return setMsg("Not signed in.");
 
     const safeName = file.name.replace(/\s+/g, "_");
     const path = `${user.id}/${Date.now()}_${safeName}`;
@@ -148,10 +176,7 @@ export default function AgencyConsole() {
       .from("agency-logos")
       .upload(path, file, { upsert: false });
 
-    if (error) {
-      setMsg(error.message);
-      return;
-    }
+    if (error) return setMsg(error.message);
 
     const { data: pub } = supabase.storage.from("agency-logos").getPublicUrl(data.path);
     setLogoUrl(pub.publicUrl);
@@ -169,7 +194,13 @@ export default function AgencyConsole() {
         name,
         slug: slugFromName, // auto from name
         logo_url: logoUrl || null,
-        theme: { primary, ink },
+        theme: {
+          primary, primaryContrast,
+          accent, accentContrast,
+          ink, muted,
+          bg, surface, card, border,
+          mode, heroPattern, heroTint, radius, elev
+        },
         is_public: isPublic,
         public_slug: (publicSlug || slugFromName || "your-agency").toLowerCase(),
         legal_name: legal,
@@ -195,9 +226,15 @@ export default function AgencyConsole() {
 
       await upsertMyAgency({
         name,
-        slug: slugFromName, // auto from name
+        slug: slugFromName,
         logo_url: logoUrl || null,
-        theme: { primary, ink },
+        theme: {
+          primary, primaryContrast,
+          accent, accentContrast,
+          ink, muted,
+          bg, surface, card, border,
+          mode, heroPattern, heroTint, radius, elev
+        },
         is_public: true,
         public_slug: pubSlug,
         legal_name: legal,
@@ -238,14 +275,35 @@ export default function AgencyConsole() {
             <div className="sep" />
             <label>Agency Name</label>
             <input value={name} onChange={(e) => setName(e.target.value)} style={input} />
-            {/* Slug is auto from name */}
             <div className="sub" style={{ marginTop: 6 }}>
               Slug will be <code>{name ? normSlug(name) : slug || "your-agency"}</code>
             </div>
 
-            <div className="row" style={{ gap: 16, marginTop: 12, flexWrap: "wrap" }}>
-              <ColorPicker label="Primary Color" value={primary} setValue={setPrimary} />
-              <ColorPicker label="Heading Color" value={ink} setValue={setInk} />
+            {/* Theme controls */}
+            <div className="grid grid-3" style={{ gap: 16, marginTop: 12 }}>
+              <ColorPicker label="Primary" value={primary} setValue={setPrimary} />
+              <ColorPicker label="Ink (Headings)" value={ink} setValue={setInk} />
+              <ColorPicker label="Accent" value={accent} setValue={setAccent} />
+
+              <ColorPicker label="Muted Text" value={muted} setValue={setMuted} />
+              <ColorPicker label="Background" value={bg} setValue={setBg} />
+              <ColorPicker label="Surface (Header)" value={surface} setValue={setSurface} />
+
+              <ColorPicker label="Card" value={card} setValue={setCard} />
+              <ColorPicker label="Border" value={border} setValue={setBorder} />
+              <ColorPicker label="Primary Contrast" value={primaryContrast} setValue={setPrimaryContrast} />
+            </div>
+
+            <div className="grid grid-3" style={{ gap: 16, marginTop: 12 }}>
+              <Select label="Mode" value={mode} setValue={setMode} options={["light","dark"]} />
+              <Select label="Elevation" value={elev} setValue={setElev} options={["none","soft","lifted"]} />
+              <Select label="Hero Pattern" value={heroPattern} setValue={setHeroPattern} options={["none","grid","dots","gradient"]} />
+            </div>
+
+            <div className="grid grid-3" style={{ gap: 16, marginTop: 12 }}>
+              <Range label={`Hero Tint (${heroTint})`} value={heroTint} setValue={setHeroTint} min={0} max={0.6} step={0.05} />
+              <Range label={`Radius (${radius}px)`} value={radius} setValue={setRadius} min={6} max={24} step={1} />
+              <ColorPicker label="Accent Contrast" value={accentContrast} setValue={setAccentContrast} />
             </div>
 
             <div style={{ marginTop: 12 }}>
@@ -415,6 +473,32 @@ function ColorPicker({ label, value, setValue }) {
         <input type="color" value={value} onChange={(e) => setValue(e.target.value)} title={label} />
         <span className="kbd">{value}</span>
       </div>
+    </div>
+  );
+}
+
+function Select({ label, value, setValue, options = [] }) {
+  return (
+    <div>
+      <div className="sub" style={{ marginBottom: 6 }}>{label}</div>
+      <select className="btn btn-ghost" value={value} onChange={(e)=>setValue(e.target.value)}>
+        {options.map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </div>
+  );
+}
+
+function Range({ label, value, setValue, min=0, max=1, step=0.01 }) {
+  return (
+    <div>
+      <div className="sub" style={{ marginBottom: 6 }}>{label}</div>
+      <input
+        type="range"
+        min={min} max={max} step={step}
+        value={value}
+        onChange={(e)=>setValue(Number(e.target.value))}
+        style={{ width: 180 }}
+      />
     </div>
   );
 }
