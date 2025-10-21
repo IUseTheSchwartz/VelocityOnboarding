@@ -9,6 +9,9 @@ import LoginAgent from "./pages/LoginAgent";
 import LoginAgency from "./pages/LoginAgency";
 import RequireAuth from "./lib/RequireAuth";
 
+/* NEW: public recruiting page */
+import PublicAgency from "./pages/PublicAgency";
+
 export default function App() {
   return (
     <ThemeProvider>
@@ -46,10 +49,15 @@ function SiteShell() {
       </nav>
 
       <Routes>
+        {/* Public pages */}
         <Route path="/" element={<Landing />} />
         <Route path="/login/agent" element={<LoginAgent />} />
         <Route path="/login/agency" element={<LoginAgency />} />
 
+        {/* NEW: public recruiting page (published agencies) */}
+        <Route path="/a/:slug" element={<PublicAgency />} />
+
+        {/* Authed app */}
         <Route
           path="/agent"
           element={
