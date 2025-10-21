@@ -248,6 +248,19 @@ export default function SuperAdmin() {
 
         {tab === "agencies" ? (
           <>
+            {/* NEW: Done-for-you provisioning card */}
+            <div className="card" style={{ marginTop: 12 }}>
+              <div className="row" style={{ gap: 8 }}>
+                <strong>Provision Agency (Done-For-You)</strong>
+              </div>
+              <div className="sub" style={{ marginTop: 6 }}>
+                Create an agency and assign it to an email. If the user doesn’t exist yet,
+                it’ll wait and auto-claim on their first login.
+              </div>
+              <div className="sep" />
+              <ProvisionAgencyForm />
+            </div>
+
             <div className="card" style={{ marginTop: 12 }}>
               {loading ? (
                 <div className="sub">Loading…</div>
@@ -439,6 +452,149 @@ export default function SuperAdmin() {
 
 function Section({ children }) {
   return <section className="section"><div className="container">{children}</div></section>;
+}
+
+/* -------------------- NEW: Provision form component -------------------- */
+
+function ProvisionAgencyForm() {
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
+  const [legal, setLegal] = useState("");
+  const [calendly, setCalendly] = useState("");
+  const [logoUrl, setLogoUrl] = useState("");
+
+  const [primary, setPrimary] = useState("#1e63f0");
+  const [ink, setInk] = useState("#0b1220");
+  const [isPublic, setIsPublic] = useState(false);
+  const [publicSlug, setPublicSlug] = useState("");
+
+  const [out, setOut] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  function normSlug(s) {
+    return (s || "").trim().toLowerCase().replace(/\s+/g, "-");
+  }
+
+  async function handleProvision(e) {
+    e.preventDefault();
+    setOut("");
+    setLoading(true);
+
+    const theme = { primary, ink };
+
+    const { data, error } = await supabase.rpc("admin_upsert_agency", {
+      p_owner_email: email.trim(),
+      p_name: name.trim(),
+      p_slug: normSlug(slug || name),
+      p_logo_url: logoUrl || null,
+      p_theme: theme,
+      p_legal_name: legal || null,
+      p_calendly_url: calendly || null,
+      p_is_public: isPublic,
+      p_public_slug: normSlug(publicSlug || slug || name),
+    });
+
+    setLoading(false);
+
+    if (error) {
+      setOut(error.message);
+      return;
+    }
+
+    const row = Array.isArray(data) ? data[0] : data;
+    setOut(`Agency ${row?.id} • ${row?.status === "assigned" ? "Owner assigned" : "Pending owner signup"}`);
+  }
+
+  return (
+    <form onSubmit={handleProvision} style={{ display: "grid", gap: 10 }}>
+      <label>Owner Email</label>
+      <input
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        style={input}
+        placeholder="owner@example.com"
+        required
+      />
+
+      <label style={{ marginTop: 4 }}>Agency Name</label>
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        style={input}
+        placeholder="Acme Insurance"
+        required
+      />
+
+      <label style={{ marginTop: 4 }}>Slug</label>
+      <input
+        value={slug}
+        onChange={(e) => setSlug(e.target.value)}
+        style={input}
+        placeholder="acme-insurance"
+      />
+
+      <div className="row" style={{ gap: 10, flexWrap: "wrap", marginTop: 6 }}>
+        <div>
+          <div className="sub" style={{ marginBottom: 6 }}>Primary</div>
+          <input type="color" value={primary} onChange={(e) => setPrimary(e.target.value)} />
+        </div>
+        <div>
+          <div className="sub" style={{ marginBottom: 6 }}>Ink</div>
+          <input type="color" value={ink} onChange={(e) => setInk(e.target.value)} />
+        </div>
+      </div>
+
+      <label style={{ marginTop: 4 }}>Logo URL (optional)</label>
+      <input
+        value={logoUrl}
+        onChange={(e) => setLogoUrl(e.target.value)}
+        style={input}
+        placeholder="https://…"
+      />
+
+      <label style={{ marginTop: 4 }}>Legal Name (optional)</label>
+      <input
+        value={legal}
+        onChange={(e) => setLegal(e.target.value)}
+        style={input}
+        placeholder="Your LLC (defaults to PRIETO INSURANCE SOLUTIONS LLC)"
+      />
+
+      <label style={{ marginTop: 4 }}>Calendly URL (optional)</label>
+      <input
+        value={calendly}
+        onChange={(e) => setCalendly(e.target.value)}
+        style={input}
+        placeholder="https://calendly.com/…"
+      />
+
+      <label className="row" style={{ marginTop: 6, gap: 8, alignItems: "center" }}>
+        <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} />
+        <span>Make page public now</span>
+      </label>
+
+      <label>Public Slug (optional)</label>
+      <input
+        value={publicSlug}
+        onChange={(e) => setPublicSlug(e.target.value)}
+        style={input}
+        placeholder="acme"
+      />
+
+      <div className="row" style={{ gap: 8, marginTop: 8 }}>
+        <button className="btn btn-primary" disabled={loading}>
+          {loading ? "Provisioning…" : "Provision Agency"}
+        </button>
+      </div>
+
+      {out && (
+        <div className="sub" style={{ color: /assigned|pending/i.test(out) ? "green" : "crimson" }}>
+          {out}
+        </div>
+      )}
+    </form>
+  );
 }
 
 const input = { width:"100%", border:"1px solid var(--border)", borderRadius:10, padding:"10px 12px", outline:"none", fontSize:14 };
