@@ -14,7 +14,7 @@ export default function LoginAgency() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
 
-  // Pre-fill invite code from URL (?code=AB12CD) — only relevant for signup
+  // Pre-fill invite code from URL (?code=AB12CD) — only used for signup
   useEffect(() => {
     const pref = (params.get("code") || "").trim();
     if (pref) setCode(pref);
@@ -36,6 +36,14 @@ export default function LoginAgency() {
     return data;
   }
 
+  async function claimPending() {
+    try {
+      await supabase.rpc("claim_agencies_for_me");
+    } catch {
+      // swallow; not fatal for UX
+    }
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setErr("");
@@ -53,22 +61,35 @@ export default function LoginAgency() {
           throw new Error("Owner invite code is required to sign up.");
         }
 
-        // Create the account
-        const { error: sErr } = await supabase.auth.signUp({ email: em, password: pass });
+        // Create the account (expects email/password signup to return a session)
+        const { data: signData, error: sErr } = await supabase.auth.signUp({ email: em, password: pass });
         if (sErr) throw sErr;
 
-        // Redeem/claim the owner invite (assigns owner + adds to agency_users)
+        // If your Supabase project requires email confirmation for signups,
+        // signData.session will be null. In that case, we can't redeem yet.
+        // Show a friendly message:
+        if (!signData?.session) {
+          setInfo("Check your email to confirm your account, then log in and we’ll claim your agency.");
+          return;
+        }
+
+        // Redeem owner invite (assign owner + add to agency_users)
         await redeemOwnerCode();
+
+        // Also claim any pending agencies for this email, just in case
+        await claimPending();
 
         setInfo("Account created and agency claimed. Redirecting…");
         navigate("/agency");
         return;
       } else {
-        // LOGIN (no code required here)
+        // LOGIN (no code required)
         const { error: lErr } = await supabase.auth.signInWithPassword({ email: em, password: pass });
         if (lErr) throw lErr;
 
-        // No invite redemption on login
+        // Auto-claim any pending agencies (e.g., provisioned earlier with this email)
+        await claimPending();
+
         setInfo("Logged in. Redirecting…");
         navigate("/agency");
         return;
@@ -156,7 +177,11 @@ export default function LoginAgency() {
 
           {mode === "login" && (
             <div className="sub" style={{ marginTop: 10 }}>
-              New owner? Switch to <button type="button" className="btn btn-ghost" onClick={() => setMode("signup")}>Sign up</button> to use your owner invite code.
+              New owner? Switch to{" "}
+              <button type="button" className="btn btn-ghost" onClick={() => setMode("signup")}>
+                Sign up
+              </button>{" "}
+              to use your owner invite code.
             </div>
           )}
         </form>
