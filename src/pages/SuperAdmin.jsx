@@ -5,7 +5,6 @@ import {
   PauseCircle, PlayCircle, Trash2, UserMinus, UserCog, Plus, ClipboardCopy, Upload
 } from "lucide-react";
 
-const APP_URL = import.meta.env.VITE_APP_URL || window.location.origin; // kept if you reuse later
 const SUPER = (import.meta.env.VITE_SUPER_ADMIN_EMAIL || "").toLowerCase();
 
 export default function SuperAdmin() {
@@ -18,7 +17,6 @@ export default function SuperAdmin() {
   const [selected, setSelected] = useState(null); // agency row selected
   const [members, setMembers] = useState([]);
   const [invites, setInvites] = useState([]);
-  const [admins, setAdmins] = useState([]);
   const [msg, setMsg] = useState("");
 
   // invite creator controls (for Super Admin)
@@ -85,15 +83,7 @@ export default function SuperAdmin() {
     if (!error) setInvites(data || []);
   }
 
-  async function fetchAdmins() {
-    const { data, error } = await supabase
-      .from("admin_users")
-      .select("email, created_at")
-      .order("created_at", { ascending: false });
-    if (!error) setAdmins(data || []);
-  }
-
-  useEffect(() => { if (uiAdmin) { fetchAgencies(); fetchAdmins(); } }, [uiAdmin]);
+  useEffect(() => { if (uiAdmin) { fetchAgencies(); } }, [uiAdmin]);
 
   const filtered = useMemo(() => {
     const t = q.trim().toLowerCase();
@@ -174,22 +164,36 @@ export default function SuperAdmin() {
 
   async function createInvite(agencyId) {
     setMsg("");
-    const { data: meRes } = await supabase.auth.getUser();
-    const code = makeCode(6);
-    const expires = new Date(Date.now() + Number(inviteDays) * 24*60*60*1000).toISOString();
-    const uses = Math.max(1, Number(inviteUses) || 1);
+    try {
+      if (!agencyId) throw new Error("Select an agency first (click Edit).");
 
-    const { error } = await supabase.from("invite_codes").insert({
-      agency_id: agencyId,
-      code,
-      role: inviteRole,       // agent | manager | owner
-      max_uses: uses,
-      expires_at: expires,
-      created_by: meRes?.user?.id || null
-    });
-    if (error) return setMsg(error.message);
-    setMsg("Invite created.");
-    await fetchInvites(agencyId);
+      const { data: meRes, error: meErr } = await supabase.auth.getUser();
+      if (meErr) throw meErr;
+
+      const code = makeCode(6);
+      const expires = new Date(Date.now() + Number(inviteDays) * 24 * 60 * 60 * 1000).toISOString();
+      const uses = Math.max(1, Number(inviteUses) || 1);
+
+      const payload = {
+        agency_id: agencyId,
+        code,
+        role: (inviteRole || "agent").toLowerCase(), // ensure lowercase
+        max_uses: uses,
+        expires_at: expires,
+        created_by: meRes?.user?.id || null,
+      };
+
+      const { error } = await supabase.from("invite_codes").insert(payload);
+      if (error) {
+        console.error("createInvite error:", error);
+        throw error;
+      }
+
+      setMsg(`Invite created (${payload.role}). Code: ${code}`);
+      await fetchInvites(agencyId);
+    } catch (e) {
+      setMsg(e.message || String(e));
+    }
   }
 
   async function disableInvite(id, agencyId) {
@@ -296,8 +300,6 @@ export default function SuperAdmin() {
                               <span className="badge" style={{ background: "#fee" }}>suspended</span>
                             ) : a.owner_user_id ? (
                               <span className="badge">active</span>
-                            ) : a.pending_owner_email ? (
-                              <span className="badge" style={{ background: "#fff7e6", color: "#8a6100" }}>owner pending</span>
                             ) : (
                               <span className="badge" style={{ background: "#f4f4f5", color: "#555" }}>no owner</span>
                             )}
@@ -332,19 +334,39 @@ export default function SuperAdmin() {
                 <div className="grid grid-3">
                   <div>
                     <label>Name</label>
-                    <input style={input} value={selected._edit.name} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, name:e.target.value}})} />
+                    <input
+                      style={input}
+                      value={selected._edit.name}
+                      onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, name:e.target.value}})}
+                    />
                     <label style={{ marginTop: 8 }}>Slug</label>
-                    <input style={input} value={selected._edit.slug} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, slug:e.target.value.replace(/\s+/g,'-').toLowerCase()}})} />
+                    <input
+                      style={input}
+                      value={selected._edit.slug}
+                      onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, slug:e.target.value.replace(/\s+/g,'-').toLowerCase()}})}
+                    />
                   </div>
                   <div>
                     <label>Primary</label>
-                    <input style={input} value={selected._edit.primary} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, primary:e.target.value}})} />
+                    <input
+                      style={input}
+                      value={selected._edit.primary}
+                      onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, primary:e.target.value}})}
+                    />
                     <label style={{ marginTop: 8 }}>Heading Color</label>
-                    <input style={input} value={selected._edit.ink} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, ink:e.target.value}})} />
+                    <input
+                      style={input}
+                      value={selected._edit.ink}
+                      onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, ink:e.target.value}})}
+                    />
                   </div>
                   <div>
                     <label>Logo URL</label>
-                    <input style={input} value={selected._edit.logo_url} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, logo_url:e.target.value}})} />
+                    <input
+                      style={input}
+                      value={selected._edit.logo_url}
+                      onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, logo_url:e.target.value}})}
+                    />
                     {selected._edit.logo_url && <div style={{ marginTop: 8 }}><img src={selected._edit.logo_url} alt="logo" style={{ maxHeight: 44 }}/></div>}
                   </div>
                 </div>
@@ -364,10 +386,18 @@ export default function SuperAdmin() {
                         <td className="row" style={{ gap: 6 }}>
                           {m.role !== "owner" && (
                             <>
-                              <button className="btn btn-ghost" onClick={()=>changeRole(selected.id, m.user_id, m.role === "manager" ? "agent" : "manager")} title="Toggle role">
+                              <button
+                                className="btn btn-ghost"
+                                onClick={()=>changeRole(selected.id, m.user_id, m.role === "manager" ? "agent" : "manager")}
+                                title="Toggle role"
+                              >
                                 <UserCog size={14}/> {m.role === "manager" ? "Make agent" : "Make manager"}
                               </button>
-                              <button className="btn btn-ghost" onClick={()=>removeMember(selected.id, m.user_id)} title="Remove">
+                              <button
+                                className="btn btn-ghost"
+                                onClick={()=>removeMember(selected.id, m.user_id)}
+                                title="Remove"
+                              >
                                 <UserMinus size={14}/> Remove
                               </button>
                             </>
@@ -393,7 +423,14 @@ export default function SuperAdmin() {
                     <input type="number" min={1} value={inviteUses} onChange={(e)=>setInviteUses(e.target.value)} className="btn btn-ghost" style={{ width: 80 }} />
                     <label className="sub">Days</label>
                     <input type="number" min={1} value={inviteDays} onChange={(e)=>setInviteDays(e.target.value)} className="btn btn-ghost" style={{ width: 80 }} />
-                    <button className="btn btn-ghost" onClick={()=>createInvite(selected.id)}><Plus size={14}/> New invite</button>
+                    <button
+                      className="btn btn-ghost"
+                      onClick={()=>createInvite(selected?.id)}
+                      disabled={!selected?.id}
+                      title={!selected?.id ? "Select an agency (Edit) first" : "Create invite code"}
+                    >
+                      <Plus size={14}/> New invite
+                    </button>
                   </div>
                 </div>
                 <table className="table" style={{ marginTop: 8 }}>
@@ -409,9 +446,13 @@ export default function SuperAdmin() {
                           <td>{inv.expires_at ? new Date(inv.expires_at).toLocaleString() : "—"}</td>
                           <td className="row" style={{ gap: 6 }}>
                             {/* Copy CODE only (no URLs) */}
-                            <button className="btn btn-ghost" onClick={()=>copy(inv.code)} title="Copy invite code"><ClipboardCopy size={14}/> Copy code</button>
+                            <button className="btn btn-ghost" onClick={()=>copy(inv.code)} title="Copy invite code">
+                              <ClipboardCopy size={14}/> Copy code
+                            </button>
                             {inv.status === "active" && (
-                              <button className="btn btn-ghost" onClick={()=>disableInvite(inv.id, selected.id)} title="Disable"><Trash2 size={14}/> Disable</button>
+                              <button className="btn btn-ghost" onClick={()=>disableInvite(inv.id, selected.id)} title="Disable">
+                                <Trash2 size={14}/> Disable
+                              </button>
                             )}
                           </td>
                         </tr>
