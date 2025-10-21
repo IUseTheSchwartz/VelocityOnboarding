@@ -101,7 +101,7 @@ export default function SuperAdmin() {
     setInvites([]);
   }
 
-  async function saveAgency()() {
+  async function saveAgency() {
     if (!selected?._edit) return;
     setMsg("");
     const { name, slug, primary, ink, logo_url } = selected._edit;
