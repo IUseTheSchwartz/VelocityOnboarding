@@ -102,7 +102,7 @@ export default function SuperAdmin() {
         name: agency.name,
         slug: agency.slug,
         logo_url: agency.logo_url || "",
-        // Theme v2
+        // Theme v2 (Basics + Advanced)
         primary: t.primary,
         primaryContrast: t.primaryContrast,
         accent: t.accent,
@@ -117,7 +117,9 @@ export default function SuperAdmin() {
         heroPattern: t.heroPattern,
         heroTint: t.heroTint,
         radius: t.radius,
-        elev: t.elev
+        elev: t.elev,
+        // UI
+        _showAdvanced: false,
       }
     });
     fetchMembers(agency.id);
@@ -134,27 +136,28 @@ export default function SuperAdmin() {
   async function saveAgency() {
     if (!selected?._edit) return;
     setMsg("");
-    const {
-      name, slug, logo_url,
-      primary, primaryContrast,
-      accent, accentContrast,
-      ink, muted,
-      bg, surface, card, border,
-      mode, heroPattern, heroTint, radius, elev
-    } = selected._edit;
+    const E = selected._edit;
+    const theme = {
+      primary: E.primary,
+      primaryContrast: E.primaryContrast,
+      accent: E.accent,
+      accentContrast: E.accentContrast,
+      ink: E.ink,
+      muted: E.muted,
+      bg: E.bg,
+      surface: E.surface,
+      card: E.card,
+      border: E.border,
+      mode: E.mode,
+      heroPattern: E.heroPattern,
+      heroTint: E.heroTint,
+      radius: E.radius,
+      elev: E.elev,
+    };
 
     const { error } = await supabase
       .from("agencies")
-      .update({
-        name, slug, logo_url,
-        theme: {
-          primary, primaryContrast,
-          accent, accentContrast,
-          ink, muted,
-          bg, surface, card, border,
-          mode, heroPattern, heroTint, radius, elev
-        }
-      })
+      .update({ name: E.name, slug: E.slug, theme, logo_url: E.logo_url })
       .eq("id", selected.id);
 
     if (error) return setMsg(error.message);
@@ -191,7 +194,7 @@ export default function SuperAdmin() {
     await fetchMembers(agencyId);
   }
 
-  // ---- Invite making (via RPC) ----
+  // ---- Invite making (now via RPC) ----
   function copy(text) {
     navigator.clipboard.writeText(text);
     setMsg("Copied.");
@@ -351,7 +354,7 @@ export default function SuperAdmin() {
                 </div>
                 <div className="sep" />
 
-                {/* Branding */}
+                {/* Branding (Basics) */}
                 <div className="grid grid-3">
                   <div>
                     <label>Name</label>
@@ -366,7 +369,36 @@ export default function SuperAdmin() {
                       value={selected._edit.slug}
                       onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, slug:e.target.value.replace(/\s+/g,'-').toLowerCase()}})}
                     />
-                    <label style={{ marginTop: 8 }}>Logo URL</label>
+                  </div>
+
+                  <ColorInput
+                    label="Primary"
+                    value={selected._edit.primary}
+                    setValue={(v)=>setSelected({...selected, _edit:{...selected._edit, primary:v}})}
+                  />
+                  <ColorInput
+                    label="Heading (Ink)"
+                    value={selected._edit.ink}
+                    setValue={(v)=>setSelected({...selected, _edit:{...selected._edit, ink:v}})}
+                  />
+                  <ColorInput
+                    label="Background"
+                    value={selected._edit.bg}
+                    setValue={(v)=>setSelected({...selected, _edit:{...selected._edit, bg:v}})}
+                  />
+                  <ColorInput
+                    label="Card"
+                    value={selected._edit.card}
+                    setValue={(v)=>setSelected({...selected, _edit:{...selected._edit, card:v}})}
+                  />
+                  <ColorInput
+                    label="Accent"
+                    value={selected._edit.accent}
+                    setValue={(v)=>setSelected({...selected, _edit:{...selected._edit, accent:v}})}
+                  />
+
+                  <div>
+                    <label>Logo URL</label>
                     <input
                       style={input}
                       value={selected._edit.logo_url}
@@ -374,63 +406,56 @@ export default function SuperAdmin() {
                     />
                     {selected._edit.logo_url && <div style={{ marginTop: 8 }}><img src={selected._edit.logo_url} alt="logo" style={{ maxHeight: 44 }}/></div>}
                   </div>
-
-                  <div>
-                    <label>Primary</label>
-                    <input style={input} value={selected._edit.primary} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, primary:e.target.value}})} />
-                    <label style={{ marginTop: 8 }}>Primary Contrast</label>
-                    <input style={input} value={selected._edit.primaryContrast} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, primaryContrast:e.target.value}})} />
-                    <label style={{ marginTop: 8 }}>Accent</label>
-                    <input style={input} value={selected._edit.accent} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, accent:e.target.value}})} />
-                    <label style={{ marginTop: 8 }}>Accent Contrast</label>
-                    <input style={input} value={selected._edit.accentContrast} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, accentContrast:e.target.value}})} />
-                  </div>
-
-                  <div>
-                    <label>Ink (Headings)</label>
-                    <input style={input} value={selected._edit.ink} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, ink:e.target.value}})} />
-                    <label style={{ marginTop: 8 }}>Muted Text</label>
-                    <input style={input} value={selected._edit.muted} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, muted:e.target.value}})} />
-                    <label style={{ marginTop: 8 }}>Border</label>
-                    <input style={input} value={selected._edit.border} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, border:e.target.value}})} />
-                  </div>
                 </div>
 
-                <div className="grid grid-3" style={{ marginTop: 8 }}>
-                  <div>
-                    <label>Background</label>
-                    <input style={input} value={selected._edit.bg} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, bg:e.target.value}})} />
-                    <label style={{ marginTop: 8 }}>Surface</label>
-                    <input style={input} value={selected._edit.surface} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, surface:e.target.value}})} />
-                    <label style={{ marginTop: 8 }}>Card</label>
-                    <input style={input} value={selected._edit.card} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, card:e.target.value}})} />
+                {/* Advanced styling (collapsed by default) */}
+                <ToggleSection
+                  title="Advanced styling"
+                  open={!!selected._edit._showAdvanced}
+                  setOpen={(open)=>setSelected({...selected, _edit:{...selected._edit, _showAdvanced: open}})}
+                >
+                  <div className="grid grid-3">
+                    <ColorInput label="Surface (Header)" value={selected._edit.surface} setValue={(v)=>setSelected({...selected, _edit:{...selected._edit, surface:v}})} />
+                    <ColorInput label="Border" value={selected._edit.border} setValue={(v)=>setSelected({...selected, _edit:{...selected._edit, border:v}})} />
+                    <ColorInput label="Muted Text" value={selected._edit.muted} setValue={(v)=>setSelected({...selected, _edit:{...selected._edit, muted:v}})} />
+                    <ColorInput label="Primary Contrast" value={selected._edit.primaryContrast} setValue={(v)=>setSelected({...selected, _edit:{...selected._edit, primaryContrast:v}})} />
+                    <ColorInput label="Accent Contrast" value={selected._edit.accentContrast} setValue={(v)=>setSelected({...selected, _edit:{...selected._edit, accentContrast:v}})} />
                   </div>
 
-                  <div>
-                    <label>Mode</label>
-                    <select className="btn btn-ghost" value={selected._edit.mode} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, mode:e.target.value}})}>
-                      <option>light</option><option>dark</option>
-                    </select>
-                    <label style={{ marginTop: 8 }}>Elevation</label>
-                    <select className="btn btn-ghost" value={selected._edit.elev} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, elev:e.target.value}})}>
-                      <option>none</option><option>soft</option><option>lifted</option>
-                    </select>
-                    <label style={{ marginTop: 8 }}>Radius (px)</label>
-                    <input type="number" min={6} max={24} className="btn btn-ghost" value={selected._edit.radius}
-                           onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, radius: Number(e.target.value)}})} />
+                  <div className="grid grid-3" style={{ marginTop: 12 }}>
+                    <div>
+                      <div className="sub" style={{ marginBottom: 6 }}>Mode</div>
+                      <select className="btn btn-ghost" value={selected._edit.mode} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, mode:e.target.value}})}>
+                        <option>light</option><option>dark</option>
+                      </select>
+                    </div>
+                    <div>
+                      <div className="sub" style={{ marginBottom: 6 }}>Elevation</div>
+                      <select className="btn btn-ghost" value={selected._edit.elev} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, elev:e.target.value}})}>
+                        <option>none</option><option>soft</option><option>lifted</option>
+                      </select>
+                    </div>
+                    <div>
+                      <div className="sub" style={{ marginBottom: 6 }}>Radius ({selected._edit.radius}px)</div>
+                      <input type="range" min={6} max={24} step={1} value={selected._edit.radius}
+                        onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, radius:Number(e.target.value)}})} />
+                    </div>
                   </div>
 
-                  <div>
-                    <label>Hero Pattern</label>
-                    <select className="btn btn-ghost" value={selected._edit.heroPattern} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, heroPattern:e.target.value}})}>
-                      <option>none</option><option>grid</option><option>dots</option><option>gradient</option>
-                    </select>
-                    <label style={{ marginTop: 8 }}>Hero Tint</label>
-                    <input type="range" min="0" max="0.6" step="0.05" value={selected._edit.heroTint}
-                           onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, heroTint: Number(e.target.value)}})} />
-                    <div className="sub">{selected._edit.heroTint}</div>
+                  <div className="grid grid-3" style={{ marginTop: 12 }}>
+                    <div>
+                      <div className="sub" style={{ marginBottom: 6 }}>Hero Pattern</div>
+                      <select className="btn btn-ghost" value={selected._edit.heroPattern} onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, heroPattern:e.target.value}})}>
+                        <option>none</option><option>grid</option><option>dots</option><option>gradient</option>
+                      </select>
+                    </div>
+                    <div>
+                      <div className="sub" style={{ marginBottom: 6 }}>Hero Tint ({selected._edit.heroTint})</div>
+                      <input type="range" min={0} max={0.6} step={0.05} value={selected._edit.heroTint}
+                        onChange={(e)=>setSelected({...selected, _edit:{...selected._edit, heroTint:Number(e.target.value)}})} />
+                    </div>
                   </div>
-                </div>
+                </ToggleSection>
 
                 {/* Members */}
                 <div className="sep" />
@@ -537,6 +562,48 @@ function Section({ children }) {
   return <section className="section"><div className="container">{children}</div></section>;
 }
 
+/* -------------------- Small UI helpers -------------------- */
+
+function ColorInput({ label, value, setValue }) {
+  return (
+    <div>
+      <div className="sub" style={{ marginBottom: 6 }}>{label}</div>
+      <div className="row" style={{ gap: 10, alignItems: "center" }}>
+        <span
+          style={{
+            width: 22, height: 22, borderRadius: 6,
+            border: "1px solid var(--border)", background: value
+          }}
+          title={value}
+        />
+        <input type="color" value={value} onChange={(e)=>setValue(e.target.value)} />
+        <input
+          value={value}
+          onChange={(e)=>setValue(e.target.value)}
+          style={{ ...input, width: 120 }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ToggleSection({ title, open, setOpen, children }) {
+  return (
+    <div style={{ marginTop: 12 }}>
+      <button
+        type="button"
+        className="btn btn-ghost"
+        onClick={()=>setOpen(!open)}
+        style={{ width: "100%", justifyContent: "space-between" }}
+      >
+        <span>{title}</span>
+        <span className="sub">{open ? "Hide" : "Show"}</span>
+      </button>
+      {open && <div style={{ marginTop: 10 }}>{children}</div>}
+    </div>
+  );
+}
+
 /* -------------------- Admins tab -------------------- */
 function AdminsTab() {
   const [admins, setAdmins] = useState([]);
@@ -614,7 +681,7 @@ function ProvisionAgencyForm() {
   const [llc, setLLC] = useState("");
   const [calendly, setCalendly] = useState("");
 
-  // theme + visibility
+  // theme + visibility (provision keeps it simple)
   const [primary, setPrimary] = useState("#1e63f0");
   const [ink, setInk] = useState("#0b1220");
   const [isPublic, setIsPublic] = useState(false);
@@ -674,7 +741,7 @@ function ProvisionAgencyForm() {
     setLoading(true);
 
     const slug = normSlug(name);
-    const theme = { primary, ink }; // Starter theme; owners can expand later
+    const theme = { primary, ink };
 
     const { data, error } = await supabase.rpc("admin_upsert_agency", {
       p_owner_email: (email || "").trim().toLowerCase(),
