@@ -22,10 +22,14 @@ export default function LoginAgency() {
     const em = (email || "").trim().toLowerCase();
 
     try {
-      // LOGIN ONLY (invite-only elsewhere)
+      // Login
       const { error } = await supabase.auth.signInWithPassword({ email: em, password: pass });
       if (error) throw error;
 
+      // NEW: Auto-claim any pre-provisioned agencies for this email
+      try { await supabase.rpc("claim_agencies_for_me"); } catch (_) {}
+
+      // Route: Super if admin, else Agency console
       const isAdmin = await isCurrentUserAdmin();
       navigate(isAdmin ? "/super" : "/agency");
     } catch (e) {
@@ -58,7 +62,7 @@ export default function LoginAgency() {
           </div>
 
           <div className="sub" style={{ marginTop: 10 }}>
-            Don’t have access? Ask a Super Admin to send you an owner invite link.
+            Don’t have access? Ask a Super Admin to provision your agency or send an owner invite link.
           </div>
         </form>
       </div>
