@@ -2,11 +2,12 @@
 import { useEffect, useState, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
-import { ArrowRight, CheckCircle2, Clock4, Sparkles, Shield, Rocket, Users, PlayCircle } from "lucide-react";
+import { normalizeTheme } from "../theme";
 
 /**
  * Public recruiting page for a published agency.
  * Reads by /a/:slug where :slug = agencies.public_slug
+ * Uses Theme v2 tokens (with fallbacks) and CSS variables.
  */
 export default function PublicAgency() {
   const { slug } = useParams();
@@ -55,52 +56,45 @@ export default function PublicAgency() {
     );
   }
 
-  const primary = agency.theme?.primary || "#1e63f0";
-  const ink = agency.theme?.ink || "#0b1220";
+  // Normalize theme and expose CSS vars with safe fallbacks
+  const t = normalizeTheme(agency.theme || {});
+  const cssVars = useMemo(() => ({
+    // colors
+    ["--primary"]: t.primary,
+    ["--primary-contrast"]: t.primaryContrast || "#ffffff",
+    ["--accent"]: t.accent || "#22c55e",
+    ["--accent-contrast"]: t.accentContrast || "#0b1220",
+    ["--ink"]: t.ink || "#0b1535",
+    ["--muted"]: t.muted || "#6b7280",
+    ["--bg"]: t.bg || "#ffffff",
+    ["--surface"]: t.surface || "#ffffff",
+    ["--card"]: t.card || "#ffffff",
+    ["--border"]: t.border || "#e5e7eb",
+    // shape/effects
+    ["--radius"]: `${Number.isFinite(t.radius) ? t.radius : 12}px`,
+    ["--shadow"]:
+      t.elev === "lifted" ? "0 20px 40px rgba(0,0,0,.08), 0 4px 10px rgba(0,0,0,.06)" :
+      t.elev === "soft"   ? "0 12px 24px rgba(0,0,0,.06), 0 2px 6px rgba(0,0,0,.05)" :
+                            "none",
+  }), [t]);
+
   const legal = (agency.legal_name || "PRIETO INSURANCE SOLUTIONS LLC").trim();
-  const heroGrad = `radial-gradient(1200px 500px at 50% -10%, ${withAlpha(primary, 0.20)} 0%, transparent 70%)`;
 
-  const features = useMemo(() => ([
-    { icon: <CheckCircle2 size={18} />, t: "Clear Playbook", d: "Day-1 steps, checklists, and scripts so you always know what’s next." },
-    { icon: <Rocket size={18} />,       t: "Fast Ramp",      d: "Bite-size trainings and live help to get you producing quickly." },
-    { icon: <Users size={18} />,        t: "Team Support",   d: "Mentorship, feedback, and accountability—we win together." },
-    { icon: <Sparkles size={18} />,     t: "Tools that Work",d: "Dialers, messaging, and a simple CRM that keeps you focused." },
-    { icon: <Clock4 size={18} />,       t: "Track Progress", d: "See your milestones and time-to-first-deal improve weekly." },
-    { icon: <Shield size={18} />,       t: "Grow Safely",    d: "Systems that scale with guardrails as you become a top producer." },
-  ]), []);
-
-  const calendlyBtn = agency.calendly_url ? (
-    <a
-      className="btn btn-primary"
-      href={agency.calendly_url}
-      target="_blank"
-      rel="noreferrer"
-      style={{ background: primary, textDecoration: "none", display: "inline-flex", gap: 8, alignItems: "center" }}
-    >
-      <PlayCircle size={16} /> Book a Call
-    </a>
-  ) : (
-    <button className="btn btn-primary" style={{ background: primary, display: "inline-flex", gap: 8, alignItems: "center" }}>
-      <PlayCircle size={16} /> Book a Call
-    </button>
-  );
+  // Hero background style based on pattern + tint
+  const heroStyle = getHeroStyle(t);
 
   return (
-    <div style={{ background: "#fff" }}>
+    <div style={{ background: "var(--bg)" }}>
       {/* Header */}
-      <header
-        style={{
-          position: "sticky",
-          top: 0,
-          zIndex: 10,
-          borderBottom: "1px solid var(--border)",
-          background: "rgba(255,255,255,0.8)",
-          backdropFilter: "saturate(120%) blur(8px)"
-        }}
-      >
-        <div className="container" style={{ padding: 12, display: "flex", alignItems: "center", gap: 12 }}>
-          <AgencyLogo src={agency.logo_url} name={agency.name} primary={primary} />
-          <div style={{ fontWeight: 600, color: "var(--ink)" }}>{agency.name}</div>
+      <header style={{
+        borderBottom: "1px solid var(--border)",
+        background: "var(--surface)",
+        position: "sticky", top: 0, zIndex: 20
+      }}>
+        <div className="container" style={{
+          padding: 14, display: "flex", alignItems: "center", gap: 12
+        }}>
+          <Brand name={agency.name} logoUrl={agency.logo_url} />
           <div style={{ marginLeft: "auto" }}>
             <Link to="/" className="btn btn-ghost" style={{ textDecoration: "none" }}>
               VelocityOnboard
@@ -110,18 +104,19 @@ export default function PublicAgency() {
       </header>
 
       {/* Hero */}
-      <section
-        style={{
-          backgroundImage: `${heroGrad}, ${gridPattern()}`,
-          backgroundBlendMode: "multiply, normal",
-          borderBottom: "1px solid var(--border)"
-        }}
-      >
-        <div className="container" style={{ padding: "56px 0 28px" }}>
-          <div className="badge" style={{ background: withAlpha(primary, 0.12), color: ink }}>
+      <section style={{ ...heroStyle }}>
+        <div className="container" style={{ padding: "64px 0 36px" }}>
+          <span className="badge" style={{
+            background: "rgba(0,0,0,0.04)", border: "1px solid var(--border)"
+          }}>
             Join {agency.name}
-          </div>
-          <h1 style={{ margin: "12px 0 10px", color: ink, lineHeight: 1.15 }}>
+          </span>
+          <h1 style={{
+            margin: "12px 0 10px",
+            color: "var(--ink)",
+            letterSpacing: "-0.02em",
+            fontSize: 36
+          }}>
             Book a call and get onboarded fast.
           </h1>
           <p className="sub" style={{ maxWidth: 720 }}>
@@ -129,150 +124,190 @@ export default function PublicAgency() {
           </p>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
-            {calendlyBtn}
-            <a className="btn btn-ghost" href="#learn" style={{ textDecoration: "none", display: "inline-flex", gap: 8, alignItems: "center" }}>
-              Learn More <ArrowRight size={16} />
+            {agency.calendly_url ? (
+              <a
+                className="btn"
+                href={agency.calendly_url}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  background: "var(--primary)",
+                  color: "var(--primary-contrast)",
+                  textDecoration: "none",
+                  borderRadius: "calc(var(--radius))",
+                  boxShadow: "var(--shadow)"
+                }}
+              >
+                Book a Call
+              </a>
+            ) : (
+              <button className="btn" style={{
+                background: "var(--primary)",
+                color: "var(--primary-contrast)",
+                borderRadius: "calc(var(--radius))",
+                boxShadow: "var(--shadow)"
+              }}>
+                Book a Call
+              </button>
+            )}
+            <a className="btn btn-ghost" href="#learn" style={{ textDecoration: "none" }}>
+              Learn More
             </a>
           </div>
-        </div>
-      </section>
-
-      {/* Social proof strip (subtle) */}
-      <section className="container" style={{ padding: "18px 0 0" }}>
-        <div
-          className="card"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 18,
-            padding: "10px 14px",
-            background: "linear-gradient(180deg, #fff, #fafafa)",
-            border: "1px solid var(--border)"
-          }}
-        >
-          <span className="sub">Built for speed • Focused on results • Community you can count on</span>
         </div>
       </section>
 
       {/* Highlights */}
       <section id="learn" className="container" style={{ padding: "32px 0 48px" }}>
         <div className="grid-3">
-          {features.map((f) => (
-            <div key={f.t} className="card" style={{ display: "grid", gap: 8, padding: 16 }}>
-              <div className="row" style={{ gap: 8, alignItems: "center" }}>
-                <div
-                  style={{
-                    width: 28, height: 28, borderRadius: 8,
-                    background: withAlpha(primary, 0.12),
-                    display: "grid", placeItems: "center"
-                  }}
-                >
-                  {f.icon}
-                </div>
-                <div style={{ fontWeight: 600, color: "var(--ink)" }}>{f.t}</div>
-              </div>
-              <div className="sub" style={{ color: "var(--ink)" }}>{f.d}</div>
+          {FEATURES.map((f) => (
+            <div key={f.t} className="card" style={{
+              background: "var(--card)",
+              border: "1px solid var(--border)",
+              borderRadius: "calc(var(--radius))",
+              boxShadow: "var(--shadow)"
+            }}>
+              <div className="badge" style={{
+                marginBottom: 8,
+                background: "rgba(0,0,0,0.04)",
+                border: "1px solid var(--border)"
+              }}>{f.t}</div>
+              <div style={{ color: "var(--ink)" }}>{f.d}</div>
             </div>
           ))}
         </div>
       </section>
 
-      {/* CTA panel */}
-      <section style={{ borderTop: "1px solid var(--border)", borderBottom: "1px solid var(--border)", background: "#fff" }}>
-        <div className="container" style={{ padding: "28px 0" }}>
-          <div className="card" style={{ padding: 18, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-            <div>
-              <div className="sub" style={{ marginBottom: 4 }}>Ready to move?</div>
-              <div style={{ fontWeight: 600, color: ink }}>Book a call—get your first-week plan today.</div>
+      {/* Simple FAQ */}
+      <section className="container" style={{ paddingBottom: 56 }}>
+        <h3 style={{ marginTop: 0, color: "var(--ink)" }}>FAQs</h3>
+        <div className="card" style={{
+          display: "grid", gap: 10,
+          background: "var(--card)",
+          border: "1px solid var(--border)",
+          borderRadius: "calc(var(--radius))",
+          boxShadow: "var(--shadow)"
+        }}>
+          {FAQS.map((qa) => (
+            <div key={qa.q}>
+              <div className="sub" style={{ fontWeight: 600 }}>{qa.q}</div>
+              <div>{qa.a}</div>
             </div>
-            {calendlyBtn}
-          </div>
+          ))}
         </div>
       </section>
 
       {/* Footer / legal */}
-      <footer>
-        <div className="container" style={{ padding: "14px 0", fontSize: 12, color: "var(--muted)", display: "flex", alignItems: "center", gap: 10 }}>
-          <span>© {new Date().getFullYear()} {legal}</span>
-          <span style={{ marginLeft: "auto" }}>
-            <Link to="/" className="sub" style={{ textDecoration: "none" }}>VelocityOnboard</Link>
-          </span>
+      <footer style={{ borderTop: "1px solid var(--border)", background: "var(--surface)" }}>
+        <div className="container" style={{ padding: "12px 0", fontSize: 12, color: "var(--muted)" }}>
+          © {new Date().getFullYear()} {legal}
         </div>
       </footer>
+
+      {/* Scope CSS variables at the root of this page */}
+      <style>{`:root{}`}</style>
+      <div style={cssVars} />
     </div>
   );
 }
 
-/* ---------- Components & helpers ---------- */
-
-function AgencyLogo({ src, name, primary }) {
-  // Nice-looking logo container regardless of source dimensions
-  const bg = `linear-gradient(135deg, ${lighten(primary, 28)} 0%, ${primary} 70%)`;
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <div
-        style={{
-          width: 40, height: 40, borderRadius: 10, overflow: "hidden",
-          border: "1px solid var(--border)",
-          background: "#fff",
-          boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
-          display: "grid", placeItems: "center"
-        }}
-      >
-        {src ? (
-          <img
-            src={src}
-            alt={`${name} logo`}
-            style={{
-              width: "90%", height: "90%",
-              objectFit: "contain", objectPosition: "center",
-              imageRendering: "auto",
-              filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.15))"
-            }}
-          />
-        ) : (
-          <div
-            aria-hidden
-            style={{
-              width: "100%", height: "100%", display: "grid", placeItems: "center",
-              background: bg, color: "#fff", fontWeight: 700
-            }}
-          >
-            {initials(name)}
-          </div>
-        )}
+function Brand({ name, logoUrl }) {
+  if (!logoUrl) {
+    return (
+      <div className="brand" style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{
+          width: 28, height: 28,
+          borderRadius: 8,
+          background: `linear-gradient(135deg, ${lighten(getVar("--primary"), 30)} 0%, var(--primary) 70%)`
+        }} />
+        <strong style={{ color: "var(--ink)" }}>{name}</strong>
       </div>
+    );
+  }
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 10
+    }}>
+      <div style={{
+        height: 36, width: 160,
+        display: "flex", alignItems: "center", justifyContent: "flex-start",
+        borderRadius: "calc(var(--radius) - 4px)",
+        background: "var(--card)",
+        border: "1px solid var(--border)",
+        padding: "6px 8px",
+        boxShadow: "var(--shadow)"
+      }}>
+        <img
+          src={logoUrl}
+          alt={`${name} logo`}
+          style={{ maxHeight: 24, maxWidth: 140, objectFit: "contain", display: "block" }}
+        />
+      </div>
+      <strong style={{ color: "var(--ink)" }}>{name}</strong>
     </div>
   );
 }
 
-function initials(s = "") {
-  const parts = s.split(/\s+/).filter(Boolean);
-  const [a, b] = [parts[0]?.[0], parts[1]?.[0]];
-  return (a || "?").toUpperCase() + (b ? b.toUpperCase() : "");
+/* -------------------- Helpers -------------------- */
+
+const FEATURES = [
+  { t: "Clear Playbook", d: "Day-1 steps, checklists, and scripts so you always know what’s next." },
+  { t: "Fast Ramp", d: "Short trainings and live help so you can start producing quickly." },
+  { t: "Team Support", d: "We win together — mentorship, feedback, and accountability." },
+  { t: "Tools that Work", d: "Dialers, messaging, and a simple CRM that keeps you focused." },
+  { t: "Track Progress", d: "See your milestones and time-to-first-deal improve week over week." },
+  { t: "Grow Your Book", d: "Systems that scale with you as you become a top producer." },
+];
+
+const FAQS = [
+  { q: "What happens after I book?", a: "You'll meet with our team, review expectations, and get your first-week checklist." },
+  { q: "Do I need experience?", a: "Nope. If you’re coachable and motivated, we’ll get you up to speed." },
+  { q: "Is there training?", a: "Yes — short video modules plus live support during your first weeks." },
+];
+
+// Build hero background from theme tokens
+function getHeroStyle(t) {
+  const base = {
+    background: "var(--surface)",
+    borderBottom: "1px solid var(--border)",
+  };
+  const tint = clamp01(t.heroTint ?? 0.2);
+  const overlay = `linear-gradient(rgba(0,0,0,${tint * 0.04}), rgba(0,0,0,${tint * 0.06}))`;
+
+  if (t.heroPattern === "grid") {
+    const grid = `linear-gradient(rgba(0,0,0,${tint * 0.03}) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,${tint * 0.03}) 1px, transparent 1px)`;
+    return { ...base, backgroundImage: `${overlay}, ${grid}`, backgroundSize: "20px 20px, 20px 20px" };
+  }
+  if (t.heroPattern === "dots") {
+    const dots = `radial-gradient(circle at 1px 1px, rgba(0,0,0,${tint * 0.05}) 1px, transparent 1px)`;
+    return { ...base, backgroundImage: `${overlay}, ${dots}`, backgroundSize: "18px 18px" };
+  }
+  if (t.heroPattern === "gradient") {
+    const g = `linear-gradient(135deg, ${lighten(t.primary || "#1E63F0", 40)} 0%, ${t.primary || "#1E63F0"} 70%)`;
+    return { ...base, backgroundImage: `${g}, ${overlay}`, backgroundBlendMode: "multiply" };
+  }
+  // none
+  return base;
 }
 
-function lighten(hex, amount = 28) {
-  const n = hex?.startsWith("#") ? hex.slice(1) : hex;
-  if (!/^[0-9a-fA-F]{6}$/.test(n)) return hex || "#1e63f0";
-  const num = parseInt(n, 16);
+function clamp01(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return 0;
+  return Math.max(0, Math.min(1, x));
+}
+
+function lighten(hex, amount = 30) {
+  const h = (hex || "#000000").replace("#", "");
+  const valid = /^[0-9a-fA-F]{6}$/.test(h) ? h : "000000";
+  const num = parseInt(valid, 16);
   let r = (num >> 16) + amount, g = ((num >> 8) & 0xff) + amount, b = (num & 0xff) + amount;
   r = Math.min(255, Math.max(0, r)); g = Math.min(255, Math.max(0, g)); b = Math.min(255, Math.max(0, b));
   return `#${(r << 16 | g << 8 | b).toString(16).padStart(6, "0")}`;
 }
 
-function withAlpha(hex, alpha = 0.2) {
-  // convert #rrggbb to rgba
-  const n = hex?.startsWith("#") ? hex.slice(1) : hex;
-  if (!/^[0-9a-fA-F]{6}$/.test(n)) return `rgba(30,99,240,${alpha})`;
-  const r = parseInt(n.slice(0, 2), 16);
-  const g = parseInt(n.slice(2, 4), 16);
-  const b = parseInt(n.slice(4, 6), 16);
-  return `rgba(${r},${g},${b},${alpha})`;
-}
-
-function gridPattern() {
-  // a subtle grid background pattern
-  return `radial-gradient(circle at 1px 1px, rgba(0,0,0,0.06) 1px, transparent 0) 0 0/20px 20px`;
+// Resolve a CSS var in JS if available (fallback to primary)
+function getVar(name, fallback = "#1E63F0") {
+  if (typeof window === "undefined") return fallback;
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name);
+  return (v || fallback).trim();
 }
