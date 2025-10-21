@@ -10,12 +10,12 @@ export default function AgencyConsole() {
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
 
-  // Branding (name/slug/logo)
+  // Branding
   const [name, setName] = useState("Your Agency");
   const [slug, setSlug] = useState("your-agency"); // internal; auto from name
   const [logoUrl, setLogoUrl] = useState("");
 
-  // Theme v2 tokens
+  // Theme v2 tokens (we’ll show Basics; rest under Advanced)
   const [primary, setPrimary] = useState(theme.primary);
   const [primaryContrast, setPrimaryContrast] = useState(theme.primaryContrast || "#ffffff");
   const [accent, setAccent] = useState(theme.accent || "#22c55e");
@@ -26,11 +26,14 @@ export default function AgencyConsole() {
   const [surface, setSurface] = useState(theme.surface || "#ffffff");
   const [card, setCard] = useState(theme.card || "#ffffff");
   const [border, setBorder] = useState(theme.border || "#e5e7eb");
-  const [mode, setMode] = useState(theme.mode || "light");               // "light" | "dark"
-  const [heroPattern, setHeroPattern] = useState(theme.heroPattern || "grid"); // "none" | "grid" | "dots" | "gradient"
-  const [heroTint, setHeroTint] = useState(theme.heroTint ?? 0.2);       // 0–0.6
-  const [radius, setRadius] = useState(theme.radius ?? 12);              // 6–24
-  const [elev, setElev] = useState(theme.elev || "soft");                // "none" | "soft" | "lifted"
+  const [mode, setMode] = useState(theme.mode || "light");
+  const [heroPattern, setHeroPattern] = useState(theme.heroPattern || "grid");
+  const [heroTint, setHeroTint] = useState(theme.heroTint ?? 0.2);
+  const [radius, setRadius] = useState(theme.radius ?? 12);
+  const [elev, setElev] = useState(theme.elev || "soft");
+
+  // UI: keep advanced collapsed by default
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Team/Invites
   const [agents, setAgents] = useState([]);
@@ -151,7 +154,7 @@ export default function AgencyConsole() {
     setMsg("Copied to clipboard.");
   }
 
-  // ------- Logo upload --------
+  // ------- Logo upload (public bucket) --------
   async function handleLogoFile(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -167,7 +170,10 @@ export default function AgencyConsole() {
     }
 
     const user = await getUser();
-    if (!user) return setMsg("Not signed in.");
+    if (!user) {
+      setMsg("Not signed in.");
+      return;
+    }
 
     const safeName = file.name.replace(/\s+/g, "_");
     const path = `${user.id}/${Date.now()}_${safeName}`;
@@ -176,7 +182,10 @@ export default function AgencyConsole() {
       .from("agency-logos")
       .upload(path, file, { upsert: false });
 
-    if (error) return setMsg(error.message);
+    if (error) {
+      setMsg(error.message);
+      return;
+    }
 
     const { data: pub } = supabase.storage.from("agency-logos").getPublicUrl(data.path);
     setLogoUrl(pub.publicUrl);
@@ -226,7 +235,7 @@ export default function AgencyConsole() {
 
       await upsertMyAgency({
         name,
-        slug: slugFromName,
+        slug: slugFromName, // auto from name
         logo_url: logoUrl || null,
         theme: {
           primary, primaryContrast,
@@ -273,54 +282,91 @@ export default function AgencyConsole() {
           <div className="card">
             <div className="row" style={{ gap: 8 }}><Settings2 size={16} /><strong>Brand</strong></div>
             <div className="sep" />
+
+            {/* Name + Slug preview */}
             <label>Agency Name</label>
             <input value={name} onChange={(e) => setName(e.target.value)} style={input} />
             <div className="sub" style={{ marginTop: 6 }}>
               Slug will be <code>{name ? normSlug(name) : slug || "your-agency"}</code>
             </div>
 
-            {/* Theme controls */}
-            <div className="grid grid-3" style={{ gap: 16, marginTop: 12 }}>
-              <ColorPicker label="Primary" value={primary} setValue={setPrimary} />
-              <ColorPicker label="Ink (Headings)" value={ink} setValue={setInk} />
-              <ColorPicker label="Accent" value={accent} setValue={setAccent} />
-
-              <ColorPicker label="Muted Text" value={muted} setValue={setMuted} />
-              <ColorPicker label="Background" value={bg} setValue={setBg} />
-              <ColorPicker label="Surface (Header)" value={surface} setValue={setSurface} />
-
-              <ColorPicker label="Card" value={card} setValue={setCard} />
-              <ColorPicker label="Border" value={border} setValue={setBorder} />
-              <ColorPicker label="Primary Contrast" value={primaryContrast} setValue={setPrimaryContrast} />
+            {/* BASICS — only 5 choices */}
+            <div className="sub" style={{ marginTop: 12, fontWeight: 600 }}>Basics</div>
+            <div className="grid grid-3" style={{ gap: 16, marginTop: 6 }}>
+              <ColorInput label="Primary" value={primary} setValue={setPrimary} />
+              <ColorInput label="Heading (Ink)" value={ink} setValue={setInk} />
+              <ColorInput label="Background" value={bg} setValue={setBg} />
+              <ColorInput label="Card" value={card} setValue={setCard} />
+              <ColorInput label="Accent" value={accent} setValue={setAccent} />
             </div>
 
-            <div className="grid grid-3" style={{ gap: 16, marginTop: 12 }}>
-              <Select label="Mode" value={mode} setValue={setMode} options={["light","dark"]} />
-              <Select label="Elevation" value={elev} setValue={setElev} options={["none","soft","lifted"]} />
-              <Select label="Hero Pattern" value={heroPattern} setValue={setHeroPattern} options={["none","grid","dots","gradient"]} />
-            </div>
-
-            <div className="grid grid-3" style={{ gap: 16, marginTop: 12 }}>
-              <Range label={`Hero Tint (${heroTint})`} value={heroTint} setValue={setHeroTint} min={0} max={0.6} step={0.05} />
-              <Range label={`Radius (${radius}px)`} value={radius} setValue={setRadius} min={6} max={24} step={1} />
-              <ColorPicker label="Accent Contrast" value={accentContrast} setValue={setAccentContrast} />
-            </div>
-
-            <div style={{ marginTop: 12 }}>
+            {/* Logo */}
+            <div style={{ marginTop: 16 }}>
               <div className="sub" style={{ marginBottom: 6 }}>Logo</div>
               <label className="btn btn-ghost" style={{ display: "inline-flex", gap: 8, alignItems: "center", cursor: "pointer" }}>
                 <Upload size={16} /> Upload logo
                 <input type="file" accept="image/*" onChange={handleLogoFile} style={{ display: "none" }} />
               </label>
-              {logoUrl && <div style={{ marginTop: 8 }}><img src={logoUrl} alt="logo preview" style={{ maxHeight: 44 }} /></div>}
+              {logoUrl && (
+                <div style={{ marginTop: 8, display: "inline-flex", alignItems: "center", gap: 10, padding: 8,
+                  border: "1px solid var(--border)", borderRadius: 10, background: "#fff" }}>
+                  <img src={logoUrl} alt="logo preview" style={{ maxHeight: 36, maxWidth: 160, objectFit: "contain" }} />
+                </div>
+              )}
             </div>
 
-            <div className="row" style={{ gap: 10, marginTop: 14 }}>
-              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Save"}</button>
+            {/* ADVANCED — collapsed by default */}
+            <ToggleSection title="Advanced styling" open={showAdvanced} setOpen={setShowAdvanced}>
+              <div className="grid grid-3" style={{ gap: 16 }}>
+                <ColorInput label="Surface (Header)" value={surface} setValue={setSurface} />
+                <ColorInput label="Border" value={border} setValue={setBorder} />
+                <ColorInput label="Muted Text" value={muted} setValue={setMuted} />
+                <ColorInput label="Primary Contrast" value={primaryContrast} setValue={setPrimaryContrast} />
+                <ColorInput label="Accent Contrast" value={accentContrast} setValue={setAccentContrast} />
+              </div>
+
+              <div className="grid grid-3" style={{ gap: 16, marginTop: 12 }}>
+                <div>
+                  <div className="sub" style={{ marginBottom: 6 }}>Mode</div>
+                  <select className="btn btn-ghost" value={mode} onChange={(e)=>setMode(e.target.value)}>
+                    <option>light</option><option>dark</option>
+                  </select>
+                </div>
+                <div>
+                  <div className="sub" style={{ marginBottom: 6 }}>Elevation</div>
+                  <select className="btn btn-ghost" value={elev} onChange={(e)=>setElev(e.target.value)}>
+                    <option>none</option><option>soft</option><option>lifted</option>
+                  </select>
+                </div>
+                <div>
+                  <div className="sub" style={{ marginBottom: 6 }}>Radius ({radius}px)</div>
+                  <input type="range" min={6} max={24} step={1} value={radius} onChange={(e)=>setRadius(Number(e.target.value))} />
+                </div>
+              </div>
+
+              <div className="grid grid-3" style={{ gap: 16, marginTop: 12 }}>
+                <div>
+                  <div className="sub" style={{ marginBottom: 6 }}>Hero Pattern</div>
+                  <select className="btn btn-ghost" value={heroPattern} onChange={(e)=>setHeroPattern(e.target.value)}>
+                    <option>none</option><option>grid</option><option>dots</option><option>gradient</option>
+                  </select>
+                </div>
+                <div>
+                  <div className="sub" style={{ marginBottom: 6 }}>Hero Tint ({heroTint})</div>
+                  <input type="range" min={0} max={0.6} step={0.05} value={heroTint}
+                    onChange={(e)=>setHeroTint(Number(e.target.value))} />
+                </div>
+              </div>
+            </ToggleSection>
+
+            <div className="row" style={{ gap: 10, marginTop: 16 }}>
+              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+                {saving ? "Saving..." : "Save"}
+              </button>
             </div>
           </div>
 
-          {/* Curriculum (placeholder content; DB next phase) */}
+          {/* Curriculum (placeholder content) */}
           <div className="card">
             <div className="row" style={{ gap: 8 }}><Film size={16} /><strong>Curriculum</strong></div>
             <div className="sub" style={{ marginTop: 6 }}>Pre-Exam / Post-Exam / Pre-Sales</div>
@@ -465,43 +511,49 @@ export default function AgencyConsole() {
   );
 }
 
-function ColorPicker({ label, value, setValue }) {
+/* ---------- Small UI helpers (bigger swatches, simple inputs) ---------- */
+
+function ColorInput({ label, value, setValue }) {
   return (
     <div>
       <div className="sub" style={{ marginBottom: 6 }}>{label}</div>
-      <div className="row" style={{ gap: 8 }}>
-        <input type="color" value={value} onChange={(e) => setValue(e.target.value)} title={label} />
-        <span className="kbd">{value}</span>
+      <div className="row" style={{ gap: 10, alignItems: "center" }}>
+        <span
+          style={{
+            width: 22, height: 22, borderRadius: 6,
+            border: "1px solid var(--border)", background: value
+          }}
+          title={value}
+        />
+        <input type="color" value={value} onChange={(e)=>setValue(e.target.value)} />
+        <input
+          value={value}
+          onChange={(e)=>setValue(e.target.value)}
+          style={{ ...input, width: 120 }}
+        />
       </div>
     </div>
   );
 }
 
-function Select({ label, value, setValue, options = [] }) {
+function ToggleSection({ title, open, setOpen, children }) {
   return (
-    <div>
-      <div className="sub" style={{ marginBottom: 6 }}>{label}</div>
-      <select className="btn btn-ghost" value={value} onChange={(e)=>setValue(e.target.value)}>
-        {options.map(o => <option key={o} value={o}>{o}</option>)}
-      </select>
+    <div style={{ marginTop: 12 }}>
+      <button
+        type="button"
+        className="btn btn-ghost"
+        onClick={()=>setOpen(!open)}
+        style={{ width: "100%", justifyContent: "space-between" }}
+      >
+        <span>{title}</span>
+        <span className="sub">{open ? "Hide" : "Show"}</span>
+      </button>
+      {open && <div style={{ marginTop: 10 }}>{children}</div>}
     </div>
   );
 }
 
-function Range({ label, value, setValue, min=0, max=1, step=0.01 }) {
-  return (
-    <div>
-      <div className="sub" style={{ marginBottom: 6 }}>{label}</div>
-      <input
-        type="range"
-        min={min} max={max} step={step}
-        value={value}
-        onChange={(e)=>setValue(Number(e.target.value))}
-        style={{ width: 180 }}
-      />
-    </div>
-  );
-}
+/* -------------------- Preview (unchanged look) -------------------- */
 
 function Preview({ name, logoUrl, primary, ink, legalName, calendlyUrl }) {
   const footerLegal = (legalName || "PRIETO INSURANCE SOLUTIONS LLC").trim();
@@ -536,7 +588,9 @@ function Preview({ name, logoUrl, primary, ink, legalName, calendlyUrl }) {
 }
 
 function lighten(hex, amount = 30) {
-  const n = hex.replace("#", ""); const num = parseInt(n, 16);
+  const n = (hex || "#000000").replace("#", "");
+  const ok = /^[0-9a-fA-F]{6}$/.test(n) ? n : "000000";
+  const num = parseInt(ok, 16);
   let r = (num >> 16) + amount, g = ((num >> 8) & 0xff) + amount, b = (num & 0xff) + amount;
   r = Math.min(255, Math.max(0, r)); g = Math.min(255, Math.max(0, g)); b = Math.min(255, Math.max(0, b));
   return `#${(r << 16 | g << 8 | b).toString(16).padStart(6, "0")}`;
