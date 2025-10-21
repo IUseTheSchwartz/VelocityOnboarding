@@ -14,7 +14,7 @@ export default function LoginAgency() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
 
-  // Pre-fill invite code from URL (?code=AB12CD)
+  // Pre-fill invite code from URL (?code=AB12CD) — only relevant for signup
   useEffect(() => {
     const pref = (params.get("code") || "").trim();
     if (pref) setCode(pref);
@@ -43,30 +43,33 @@ export default function LoginAgency() {
     setLoading(true);
 
     const em = (email || "").trim().toLowerCase();
+
     try {
       if (mode === "signup") {
         if (!pass || pass.length < 6) {
           throw new Error("Password must be at least 6 characters.");
         }
-        // Create account
+        if (!normCode(code)) {
+          throw new Error("Owner invite code is required to sign up.");
+        }
+
+        // Create the account
         const { error: sErr } = await supabase.auth.signUp({ email: em, password: pass });
         if (sErr) throw sErr;
 
-        // Redeem the owner code (assign agency + owner)
+        // Redeem/claim the owner invite (assigns owner + adds to agency_users)
         await redeemOwnerCode();
 
         setInfo("Account created and agency claimed. Redirecting…");
         navigate("/agency");
         return;
       } else {
-        // mode === "login"
+        // LOGIN (no code required here)
         const { error: lErr } = await supabase.auth.signInWithPassword({ email: em, password: pass });
         if (lErr) throw lErr;
 
-        // Redeem the owner code (required)
-        await redeemOwnerCode();
-
-        setInfo("Logged in and agency claimed. Redirecting…");
+        // No invite redemption on login
+        setInfo("Logged in. Redirecting…");
         navigate("/agency");
         return;
       }
@@ -124,32 +127,38 @@ export default function LoginAgency() {
             style={input}
           />
 
-          <label style={{ marginTop: 10 }}>Owner Invite Code</label>
-          <input
-            value={code}
-            onChange={(e)=>setCode(e.target.value)}
-            placeholder="e.g., AB27QK"
-            style={input}
-          />
-          <div className="sub" style={{ marginTop: 6 }}>
-            The invite code is required and must be an <strong>owner</strong> code created in Super Admin.
-          </div>
+          {mode === "signup" && (
+            <>
+              <label style={{ marginTop: 10 }}>Owner Invite Code</label>
+              <input
+                value={code}
+                onChange={(e)=>setCode(e.target.value)}
+                placeholder="e.g., AB27QK"
+                style={input}
+              />
+              <div className="sub" style={{ marginTop: 6 }}>
+                Required for sign up. Ask a Super Admin to generate an <strong>owner</strong> code for your agency.
+              </div>
+            </>
+          )}
 
           {err && <div className="sub" style={{ color: "crimson", marginTop: 10 }}>{err}</div>}
           {info && <div className="sub" style={{ color: "green", marginTop: 10 }}>{info}</div>}
 
           <div className="row" style={{ gap: 10, marginTop: 14 }}>
             <button className="btn btn-primary" type="submit" disabled={loading}>
-              {loading ? "Please wait…" : (mode === "signup" ? "Create account & claim" : "Login & claim")}
+              {loading ? "Please wait…" : (mode === "signup" ? "Create account & claim" : "Login")}
             </button>
             <Link to="/login/agent" className="btn btn-ghost" style={{ textDecoration: "none" }}>
               Agent login
             </Link>
           </div>
 
-          <div className="sub" style={{ marginTop: 10 }}>
-            Don’t have an owner invite? Ask a Super Admin to generate one for your agency.
-          </div>
+          {mode === "login" && (
+            <div className="sub" style={{ marginTop: 10 }}>
+              New owner? Switch to <button type="button" className="btn btn-ghost" onClick={() => setMode("signup")}>Sign up</button> to use your owner invite code.
+            </div>
+          )}
         </form>
       </div>
     </section>
