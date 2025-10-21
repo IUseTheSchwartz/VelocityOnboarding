@@ -1,6 +1,6 @@
 // src/pages/AgencyConsole.jsx
 import React, { useEffect, useState } from "react";
-import { Settings2, Users, Film, LayoutDashboard, Upload, ClipboardCopy, Ban } from "lucide-react";
+import { Settings2, Users, Film, LayoutDashboard, Upload, ClipboardCopy, Ban, ChevronDown, ChevronRight } from "lucide-react";
 import { useTheme, normalizeTheme } from "../theme";
 import { supabase } from "../lib/supabaseClient";
 import { getUser, getCurrentAgency, listAgentsForMyAgency, upsertMyAgency } from "../lib/db";
@@ -12,10 +12,10 @@ export default function AgencyConsole() {
 
   // Branding
   const [name, setName] = useState("Your Agency");
-  const [slug, setSlug] = useState("your-agency"); // internal; auto from name
+  const [slug, setSlug] = useState("your-agency");
   const [logoUrl, setLogoUrl] = useState("");
 
-  // Theme v2 tokens (we’ll show Basics; rest under Advanced)
+  // Theme v2 tokens
   const [primary, setPrimary] = useState(theme.primary);
   const [primaryContrast, setPrimaryContrast] = useState(theme.primaryContrast || "#ffffff");
   const [accent, setAccent] = useState(theme.accent || "#22c55e");
@@ -32,7 +32,6 @@ export default function AgencyConsole() {
   const [radius, setRadius] = useState(theme.radius ?? 12);
   const [elev, setElev] = useState(theme.elev || "soft");
 
-  // UI: keep advanced collapsed by default
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Team/Invites
@@ -51,7 +50,7 @@ export default function AgencyConsole() {
 
   const normSlug = (s) => (s || "").trim().toLowerCase().replace(/\s+/g, "-");
 
-  // 🚧 If the signed-in user is an admin, bounce them to /super
+  // If admin, redirect to /super
   useEffect(() => {
     (async () => {
       const { data, error } = await supabase.rpc("is_current_admin");
@@ -67,7 +66,6 @@ export default function AgencyConsole() {
         setSlug(a.slug || "your-agency");
         setLogoUrl(a.logo_url || "");
 
-        // hydrate Theme v2 safely
         const t = normalizeTheme(a.theme || {});
         setPrimary(t.primary); setPrimaryContrast(t.primaryContrast);
         setAccent(t.accent); setAccentContrast(t.accentContrast);
@@ -89,7 +87,7 @@ export default function AgencyConsole() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // keep live preview in sync with context
+  // keep preview in sync
   useEffect(() => {
     setTheme({
       primary, primaryContrast,
@@ -154,7 +152,7 @@ export default function AgencyConsole() {
     setMsg("Copied to clipboard.");
   }
 
-  // ------- Logo upload (public bucket) --------
+  // ------- Logo upload --------
   async function handleLogoFile(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -201,7 +199,7 @@ export default function AgencyConsole() {
 
       const payload = {
         name,
-        slug: slugFromName, // auto from name
+        slug: slugFromName,
         logo_url: logoUrl || null,
         theme: {
           primary, primaryContrast,
@@ -235,7 +233,7 @@ export default function AgencyConsole() {
 
       await upsertMyAgency({
         name,
-        slug: slugFromName, // auto from name
+        slug: slugFromName,
         logo_url: logoUrl || null,
         theme: {
           primary, primaryContrast,
@@ -280,93 +278,89 @@ export default function AgencyConsole() {
         <div className="grid grid-3" style={{ marginTop: 8 }}>
           {/* Brand */}
           <div className="card">
-            <div className="row" style={{ gap: 8 }}><Settings2 size={16} /><strong>Brand</strong></div>
+            <div className="row" style={{ gap: 8, alignItems: "center" }}>
+              <Settings2 size={16} /><strong>Brand</strong>
+            </div>
             <div className="sep" />
 
-            {/* Name + Slug preview */}
-            <label>Agency Name</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} style={input} />
-            <div className="sub" style={{ marginTop: 6 }}>
+            {/* Name + Slug */}
+            <Field label="Agency Name">
+              <input value={name} onChange={(e) => setName(e.target.value)} style={input} />
+            </Field>
+            <div className="sub" style={{ margin: "-4px 0 8px 2px" }}>
               Slug will be <code>{name ? normSlug(name) : slug || "your-agency"}</code>
             </div>
 
-            {/* BASICS — only 5 choices */}
-            <div className="sub" style={{ marginTop: 12, fontWeight: 600 }}>Basics</div>
-            <div className="grid grid-3" style={{ gap: 16, marginTop: 6 }}>
-              <ColorInput label="Primary" value={primary} setValue={setPrimary} />
-              <ColorInput label="Heading (Ink)" value={ink} setValue={setInk} />
-              <ColorInput label="Background" value={bg} setValue={setBg} />
-              <ColorInput label="Card" value={card} setValue={setCard} />
-              <ColorInput label="Accent" value={accent} setValue={setAccent} />
+            {/* Basics */}
+            <div className="sub" style={{ marginTop: 10, fontWeight: 600 }}>Basics</div>
+            <div className="grid grid-2" style={{ gap: 12, marginTop: 8 }}>
+              <ColorField label="Primary" value={primary} setValue={setPrimary} />
+              <ColorField label="Heading (Ink)" value={ink} setValue={setInk} />
+              <ColorField label="Background" value={bg} setValue={setBg} />
+              <ColorField label="Card" value={card} setValue={setCard} />
+              <ColorField label="Accent" value={accent} setValue={setAccent} />
             </div>
 
             {/* Logo */}
-            <div style={{ marginTop: 16 }}>
-              <div className="sub" style={{ marginBottom: 6 }}>Logo</div>
-              <label className="btn btn-ghost" style={{ display: "inline-flex", gap: 8, alignItems: "center", cursor: "pointer" }}>
+            <Field label="Logo">
+              <label className="btn btn-ghost" style={{ display: "inline-flex", gap: 8, alignItems: "center", cursor: "pointer", height: 40 }}>
                 <Upload size={16} /> Upload logo
                 <input type="file" accept="image/*" onChange={handleLogoFile} style={{ display: "none" }} />
               </label>
               {logoUrl && (
                 <div style={{ marginTop: 8, display: "inline-flex", alignItems: "center", gap: 10, padding: 8,
-                  border: "1px solid var(--border)", borderRadius: 10, background: "#fff" }}>
-                  <img src={logoUrl} alt="logo preview" style={{ maxHeight: 36, maxWidth: 160, objectFit: "contain" }} />
+                  border: "1px solid var(--border)", borderRadius: 12, background: "#fff" }}>
+                  <img src={logoUrl} alt="logo preview" style={{ maxHeight: 40, maxWidth: 180, objectFit: "contain" }} />
                 </div>
               )}
-            </div>
+            </Field>
 
-            {/* ADVANCED — collapsed by default */}
-            <ToggleSection title="Advanced styling" open={showAdvanced} setOpen={setShowAdvanced}>
-              <div className="grid grid-3" style={{ gap: 16 }}>
-                <ColorInput label="Surface (Header)" value={surface} setValue={setSurface} />
-                <ColorInput label="Border" value={border} setValue={setBorder} />
-                <ColorInput label="Muted Text" value={muted} setValue={setMuted} />
-                <ColorInput label="Primary Contrast" value={primaryContrast} setValue={setPrimaryContrast} />
-                <ColorInput label="Accent Contrast" value={accentContrast} setValue={setAccentContrast} />
+            {/* Advanced */}
+            <Expander title="Advanced styling" open={showAdvanced} onToggle={() => setShowAdvanced(v => !v)}>
+              <div className="grid grid-2" style={{ gap: 12 }}>
+                <ColorField label="Surface (Header)" value={surface} setValue={setSurface} />
+                <ColorField label="Border" value={border} setValue={setBorder} />
+                <ColorField label="Muted Text" value={muted} setValue={setMuted} />
+                <ColorField label="Primary Contrast" value={primaryContrast} setValue={setPrimaryContrast} />
+                <ColorField label="Accent Contrast" value={accentContrast} setValue={setAccentContrast} />
               </div>
 
-              <div className="grid grid-3" style={{ gap: 16, marginTop: 12 }}>
-                <div>
-                  <div className="sub" style={{ marginBottom: 6 }}>Mode</div>
-                  <select className="btn btn-ghost" value={mode} onChange={(e)=>setMode(e.target.value)}>
+              <div className="grid grid-3" style={{ gap: 12, marginTop: 12 }}>
+                <Field label="Mode">
+                  <select className="btn btn-ghost" value={mode} onChange={(e)=>setMode(e.target.value)} style={select}>
                     <option>light</option><option>dark</option>
                   </select>
-                </div>
-                <div>
-                  <div className="sub" style={{ marginBottom: 6 }}>Elevation</div>
-                  <select className="btn btn-ghost" value={elev} onChange={(e)=>setElev(e.target.value)}>
+                </Field>
+                <Field label="Elevation">
+                  <select className="btn btn-ghost" value={elev} onChange={(e)=>setElev(e.target.value)} style={select}>
                     <option>none</option><option>soft</option><option>lifted</option>
                   </select>
-                </div>
-                <div>
-                  <div className="sub" style={{ marginBottom: 6 }}>Radius ({radius}px)</div>
-                  <input type="range" min={6} max={24} step={1} value={radius} onChange={(e)=>setRadius(Number(e.target.value))} />
-                </div>
+                </Field>
+                <Field label={`Radius (${radius}px)`}>
+                  <input type="range" min={6} max={24} step={1} value={radius} onChange={(e)=>setRadius(Number(e.target.value))} style={{ width: "100%" }} />
+                </Field>
               </div>
 
-              <div className="grid grid-3" style={{ gap: 16, marginTop: 12 }}>
-                <div>
-                  <div className="sub" style={{ marginBottom: 6 }}>Hero Pattern</div>
-                  <select className="btn btn-ghost" value={heroPattern} onChange={(e)=>setHeroPattern(e.target.value)}>
+              <div className="grid grid-3" style={{ gap: 12, marginTop: 12 }}>
+                <Field label="Hero Pattern">
+                  <select className="btn btn-ghost" value={heroPattern} onChange={(e)=>setHeroPattern(e.target.value)} style={select}>
                     <option>none</option><option>grid</option><option>dots</option><option>gradient</option>
                   </select>
-                </div>
-                <div>
-                  <div className="sub" style={{ marginBottom: 6 }}>Hero Tint ({heroTint})</div>
-                  <input type="range" min={0} max={0.6} step={0.05} value={heroTint}
-                    onChange={(e)=>setHeroTint(Number(e.target.value))} />
-                </div>
+                </Field>
+                <Field label={`Hero Tint (${heroTint})`}>
+                  <input type="range" min={0} max={0.6} step={0.05} value={heroTint} onChange={(e)=>setHeroTint(Number(e.target.value))} style={{ width: "100%" }} />
+                </Field>
               </div>
-            </ToggleSection>
+            </Expander>
 
-            <div className="row" style={{ gap: 10, marginTop: 16 }}>
+            <div className="row" style={{ gap: 10, marginTop: 14 }}>
               <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
                 {saving ? "Saving..." : "Save"}
               </button>
             </div>
           </div>
 
-          {/* Curriculum (placeholder content) */}
+          {/* Curriculum (placeholder) */}
           <div className="card">
             <div className="row" style={{ gap: 8 }}><Film size={16} /><strong>Curriculum</strong></div>
             <div className="sub" style={{ marginTop: 6 }}>Pre-Exam / Post-Exam / Pre-Sales</div>
@@ -378,7 +372,7 @@ export default function AgencyConsole() {
             </ul>
           </div>
 
-          {/* Team from DB */}
+          {/* Team */}
           <div className="card">
             <div className="row" style={{ gap: 8 }}><Users size={16} /><strong>Team</strong></div>
             <div className="sep" />
@@ -401,7 +395,6 @@ export default function AgencyConsole() {
           <div className="card" style={{ gridColumn: "1 / -1" }}>
             <div className="row" style={{ gap: 8 }}><Settings2 size={16} /><strong>Invite Agents</strong></div>
             <div className="sep" />
-
             <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
               <button className="btn btn-primary" onClick={generateInvite}>Generate invite code</button>
               <div className="sub">Codes expire in 7 days • 1 use (owner can disable)</div>
@@ -448,30 +441,28 @@ export default function AgencyConsole() {
             <div className="sep" />
 
             <label className="row" style={{ gap: 10, alignItems: "center" }}>
-              <input
-                type="checkbox"
-                checked={isPublic}
-                onChange={(e) => setIsPublic(e.target.checked)}
-              /> <span>Make page public</span>
+              <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} /> <span>Make page public</span>
             </label>
 
-            <label style={{ marginTop: 10 }}>Public URL slug</label>
-            <input
-              value={publicSlug}
-              onChange={(e) => setPublicSlug(e.target.value.replace(/\s+/g, "-").toLowerCase())}
-              style={input}
-              placeholder="my-agency"
-            />
+            <Field label="Public URL slug">
+              <input
+                value={publicSlug}
+                onChange={(e) => setPublicSlug(e.target.value.replace(/\s+/g, "-").toLowerCase())}
+                style={input}
+                placeholder="my-agency"
+              />
+            </Field>
 
-            <label style={{ marginTop: 10 }}>Calendly URL (optional)</label>
-            <input
-              value={calendlyUrl}
-              onChange={(e) => setCalendlyUrl(e.target.value)}
-              style={input}
-              placeholder="https://calendly.com/your-link"
-            />
+            <Field label="Calendly URL (optional)">
+              <input
+                value={calendlyUrl}
+                onChange={(e) => setCalendlyUrl(e.target.value)}
+                style={input}
+                placeholder="https://calendly.com/your-link"
+              />
+            </Field>
 
-            <div className="sub" style={{ marginTop: 10 }}>
+            <div className="sub" style={{ marginTop: 6 }}>
               Your page will be live at: <a href={publicUrl} target="_blank" rel="noreferrer">{publicUrl}</a>
             </div>
 
@@ -487,13 +478,14 @@ export default function AgencyConsole() {
 
             <div className="sep" style={{ marginTop: 12 }} />
 
-            <div className="sub" style={{ marginTop: 6 }}>LLC (optional)</div>
-            <input
-              value={legalName}
-              onChange={(e) => setLegalName(e.target.value)}
-              style={input}
-              placeholder="Your LLC (defaults to PRIETO INSURANCE SOLUTIONS LLC)"
-            />
+            <Field label="LLC (optional)">
+              <input
+                value={legalName}
+                onChange={(e) => setLegalName(e.target.value)}
+                style={input}
+                placeholder="Your LLC (defaults to PRIETO INSURANCE SOLUTIONS LLC)"
+              />
+            </Field>
             <div className="sub" style={{ marginTop: 6 }}>
               If blank, it will default to <strong>PRIETO INSURANCE SOLUTIONS LLC</strong> on your public page.
             </div>
@@ -511,49 +503,76 @@ export default function AgencyConsole() {
   );
 }
 
-/* ---------- Small UI helpers (bigger swatches, simple inputs) ---------- */
+/* -------------------- UI helpers: neat, aligned fields -------------------- */
 
-function ColorInput({ label, value, setValue }) {
+function Field({ label, children }) {
+  return (
+    <div style={{ marginTop: 10 }}>
+      {label && <div className="sub" style={{ marginBottom: 6 }}>{label}</div>}
+      {children}
+    </div>
+  );
+}
+
+function ColorField({ label, value, setValue }) {
   return (
     <div>
       <div className="sub" style={{ marginBottom: 6 }}>{label}</div>
-      <div className="row" style={{ gap: 10, alignItems: "center" }}>
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "32px 110px 1fr",
+        gap: 8,
+        alignItems: "center"
+      }}>
         <span
           style={{
-            width: 22, height: 22, borderRadius: 6,
+            width: 32, height: 32, borderRadius: 10,
             border: "1px solid var(--border)", background: value
           }}
           title={value}
         />
-        <input type="color" value={value} onChange={(e)=>setValue(e.target.value)} />
+        <input
+          type="color"
+          value={value}
+          onChange={(e)=>setValue(e.target.value)}
+          style={{ width: 110, height: 40, padding: 0, borderRadius: 10, border: "1px solid var(--border)" }}
+          title={label}
+        />
         <input
           value={value}
           onChange={(e)=>setValue(e.target.value)}
-          style={{ ...input, width: 120 }}
+          style={{ ...input, height: 40 }}
         />
       </div>
     </div>
   );
 }
 
-function ToggleSection({ title, open, setOpen, children }) {
+function Expander({ title, open, onToggle, children }) {
   return (
-    <div style={{ marginTop: 12 }}>
+    <div style={{ marginTop: 14 }}>
       <button
         type="button"
         className="btn btn-ghost"
-        onClick={()=>setOpen(!open)}
-        style={{ width: "100%", justifyContent: "space-between" }}
+        onClick={onToggle}
+        style={{
+          width: "100%", justifyContent: "space-between",
+          height: 42, borderRadius: 12, border: "1px solid var(--border)",
+          background: "var(--panel)"
+        }}
       >
-        <span>{title}</span>
+        <span className="row" style={{ gap: 8, alignItems: "center" }}>
+          {open ? <ChevronDown size={16}/> : <ChevronRight size={16}/>}
+          {title}
+        </span>
         <span className="sub">{open ? "Hide" : "Show"}</span>
       </button>
-      {open && <div style={{ marginTop: 10 }}>{children}</div>}
+      {open && <div style={{ marginTop: 12 }}>{children}</div>}
     </div>
   );
 }
 
-/* -------------------- Preview (unchanged look) -------------------- */
+/* -------------------- Preview -------------------- */
 
 function Preview({ name, logoUrl, primary, ink, legalName, calendlyUrl }) {
   const footerLegal = (legalName || "PRIETO INSURANCE SOLUTIONS LLC").trim();
@@ -563,7 +582,7 @@ function Preview({ name, logoUrl, primary, ink, legalName, calendlyUrl }) {
       <div style={{ background: "#fff" }}>
         <div style={{ padding: 16, display: "flex", alignItems: "center", gap: 10, borderBottom: "1px solid var(--border)" }}>
           <div style={{ width: 28, height: 28, borderRadius: 8, background: `linear-gradient(135deg, ${lighten(primary, 30)} 0%, ${primary} 70%)` }} />
-          {logoUrl ? <img src={logoUrl} alt="logo" style={{ height: 22 }} /> : <strong style={{ color: ink }}>{name}</strong>}
+          {logoUrl ? <img src={logoUrl} alt="logo" style={{ height: 22, objectFit: "contain" }} /> : <strong style={{ color: ink }}>{name}</strong>}
         </div>
         <div style={{ padding: 22 }}>
           <h3 style={{ margin: 0, color: ink }}>Join {name}</h3>
@@ -587,6 +606,8 @@ function Preview({ name, logoUrl, primary, ink, legalName, calendlyUrl }) {
   );
 }
 
+/* -------------------- misc -------------------- */
+
 function lighten(hex, amount = 30) {
   const n = (hex || "#000000").replace("#", "");
   const ok = /^[0-9a-fA-F]{6}$/.test(n) ? n : "000000";
@@ -596,4 +617,11 @@ function lighten(hex, amount = 30) {
   return `#${(r << 16 | g << 8 | b).toString(16).padStart(6, "0")}`;
 }
 
-const input = { width: "100%", border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px", outline: "none", fontSize: 14 };
+const input = {
+  width: "100%", border: "1px solid var(--border)", borderRadius: 12,
+  padding: "10px 12px", outline: "none", fontSize: 14, height: 40
+};
+
+const select = {
+  height: 40, borderRadius: 12, border: "1px solid var(--border)", padding: "8px 10px"
+};
