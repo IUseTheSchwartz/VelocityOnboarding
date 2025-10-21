@@ -9,17 +9,28 @@ import { useNavigate } from "react-router-dom";
 export default function AgencyConsole() {
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
+
+  // Branding
   const [name, setName] = useState("Your Agency");
   const [slug, setSlug] = useState("your-agency");
   const [primary, setPrimary] = useState(theme.primary);
   const [ink, setInk] = useState(theme.ink);
   const [logoUrl, setLogoUrl] = useState("");
+
+  // Team/Invites
   const [agents, setAgents] = useState([]);
   const [invites, setInvites] = useState([]);
+
+  // New: Publishing + legal
+  const [isPublic, setIsPublic] = useState(false);
+  const [publicSlug, setPublicSlug] = useState("your-agency");
+  const [legalName, setLegalName] = useState("");
+
   const [saving, setSaving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [msg, setMsg] = useState("");
 
-  // 🚧 If the signed-in user is an admin, bounce them to /super (uses RPC to avoid RLS/casing issues)
+  // 🚧 If the signed-in user is an admin, bounce them to /super
   useEffect(() => {
     (async () => {
       const { data, error } = await supabase.rpc("is_current_admin");
@@ -37,6 +48,10 @@ export default function AgencyConsole() {
         if (a.theme?.primary) setPrimary(a.theme.primary);
         if (a.theme?.ink) setInk(a.theme.ink);
         setTheme(a.theme || theme);
+        // New fields (safe defaults)
+        setIsPublic(Boolean(a.is_public));
+        setPublicSlug(a.public_slug || a.slug || "your-agency");
+        setLegalName(a.legal_name || "");
         await fetchInvites(a.id);
       }
       const list = await listAgentsForMyAgency();
@@ -139,15 +154,23 @@ export default function AgencyConsole() {
     setMsg("Logo uploaded.");
   }
 
+  // ------- Save / Publish --------
   async function handleSave() {
     try {
       setSaving(true); setMsg("");
-      await upsertMyAgency({
+      // Default legal name if empty → PRIETO INSURANCE SOLUTIONS LLC
+      const legal = (legalName || "PRIETO INSURANCE SOLUTIONS LLC").trim();
+      const payload = {
         name,
         slug,
         logo_url: logoUrl || null,
         theme: { primary, ink },
-      });
+        // new fields
+        is_public: isPublic,
+        public_slug: (publicSlug || slug || "your-agency").toLowerCase(),
+        legal_name: legal
+      };
+      await upsertMyAgency(payload);
       setMsg("Saved agency settings.");
     } catch (e) {
       setMsg(String(e.message || e));
@@ -155,6 +178,32 @@ export default function AgencyConsole() {
       setSaving(false);
     }
   }
+
+  async function handlePublish() {
+    try {
+      setPublishing(true); setMsg("");
+      const legal = (legalName || "PRIETO INSURANCE SOLUTIONS LLC").trim();
+      const slugVal = (publicSlug || slug || "your-agency").toLowerCase().replace(/\s+/g, "-");
+      await upsertMyAgency({
+        name,
+        slug,
+        logo_url: logoUrl || null,
+        theme: { primary, ink },
+        is_public: true,
+        public_slug: slugVal,
+        legal_name: legal
+      });
+      setIsPublic(true);
+      setPublicSlug(slugVal);
+      setMsg("Published! Your page is now public.");
+    } catch (e) {
+      setMsg(String(e.message || e));
+    } finally {
+      setPublishing(false);
+    }
+  }
+
+  const publicUrl = `${window.location.origin}/a/${(publicSlug || slug || "your-agency")}`;
 
   return (
     <section className="section">
@@ -165,7 +214,7 @@ export default function AgencyConsole() {
         </div>
 
         {msg && (
-          <div className="sub" style={{ margin: "8px 0", color: /saved|uploaded|copied|created|disabled/i.test(msg) ? "green" : "crimson" }}>
+          <div className="sub" style={{ margin: "8px 0", color: /saved|uploaded|copied|created|disabled|Published/i.test(msg) ? "green" : "crimson" }}>
             {msg}
           </div>
         )}
@@ -177,7 +226,7 @@ export default function AgencyConsole() {
             <div className="sep" />
             <label>Agency Name</label>
             <input value={name} onChange={(e) => setName(e.target.value)} style={input} />
-            <label style={{ marginTop: 8 }}>Agency Slug (for URL)</label>
+            <label style={{ marginTop: 8 }}>Agency Slug (internal)</label>
             <input value={slug} onChange={(e) => setSlug(e.target.value.replace(/\s+/g, '-').toLowerCase())} style={input} />
 
             <div className="row" style={{ gap: 16, marginTop: 12, flexWrap: "wrap" }}>
@@ -272,11 +321,63 @@ export default function AgencyConsole() {
             </table>
           </div>
 
+          {/* NEW: Public page controls */}
+          <div className="card" style={{ gridColumn: "1 / -1" }}>
+            <div className="row" style={{ gap: 8 }}><LayoutDashboard size={16} /><strong>Public Recruiting Page</strong></div>
+            <div className="sub" style={{ marginTop: 6 }}>
+              Build your public landing page to book calls with recruits. Toggle visibility and customize your URL.
+            </div>
+            <div className="sep" />
+
+            <label className="row" style={{ gap: 10, alignItems: "center" }}>
+              <input
+                type="checkbox"
+                checked={isPublic}
+                onChange={(e) => setIsPublic(e.target.checked)}
+              /> <span>Make page public</span>
+            </label>
+
+            <label style={{ marginTop: 10 }}>Public URL slug</label>
+            <input
+              value={publicSlug}
+              onChange={(e) => setPublicSlug(e.target.value.replace(/\s+/g, "-").toLowerCase())}
+              style={input}
+              placeholder="my-agency"
+            />
+
+            <div className="sub" style={{ marginTop: 10 }}>
+              Your page will be live at: <a href={publicUrl} target="_blank" rel="noreferrer">{publicUrl}</a>
+            </div>
+
+            <div className="row" style={{ gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+              <button className="btn btn-primary" onClick={handlePublish} disabled={publishing}>
+                {publishing ? "Publishing..." : (isPublic ? "Republish" : "Publish")}
+              </button>
+              <button className="btn btn-ghost" onClick={() => copy(publicUrl)}>
+                <ClipboardCopy size={14} /> Copy public link
+              </button>
+              <a className="btn btn-ghost" href={publicUrl} target="_blank" rel="noreferrer">Open</a>
+            </div>
+
+            <div className="sep" style={{ marginTop: 12 }} />
+
+            <div className="sub" style={{ marginTop: 6 }}>Footer Legal Name (optional)</div>
+            <input
+              value={legalName}
+              onChange={(e) => setLegalName(e.target.value)}
+              style={input}
+              placeholder="e.g., Your LLC Name"
+            />
+            <div className="sub" style={{ marginTop: 6 }}>
+              If blank, it will default to <strong>PRIETO INSURANCE SOLUTIONS LLC</strong> on your public page.
+            </div>
+          </div>
+
           {/* Live preview */}
           <div className="card" style={{ gridColumn: "1 / -1" }}>
             <div className="row" style={{ gap: 8 }}><LayoutDashboard size={16} /><strong>Live Preview</strong></div>
             <div className="sep" />
-            <Preview name={name} logoUrl={logoUrl} primary={primary} ink={ink} />
+            <Preview name={name} logoUrl={logoUrl} primary={primary} ink={ink} legalName={legalName} />
           </div>
         </div>
       </div>
@@ -296,7 +397,8 @@ function ColorPicker({ label, value, setValue }) {
   );
 }
 
-function Preview({ name, logoUrl, primary, ink }) {
+function Preview({ name, logoUrl, primary, ink, legalName }) {
+  const footerLegal = (legalName || "PRIETO INSURANCE SOLUTIONS LLC").trim();
   return (
     <div style={{ border: "1px dashed var(--border)", borderRadius: 12, overflow: "hidden" }}>
       <div style={{ background: "#fff" }}>
@@ -305,12 +407,15 @@ function Preview({ name, logoUrl, primary, ink }) {
           {logoUrl ? <img src={logoUrl} alt="logo" style={{ height: 22 }} /> : <strong style={{ color: ink }}>{name}</strong>}
         </div>
         <div style={{ padding: 22 }}>
-          <h3 style={{ margin: 0, color: ink }}>Welcome to {name}</h3>
-          <p className="sub" style={{ marginTop: 6 }}>Your agency’s white-labeled onboarding hub.</p>
+          <h3 style={{ margin: 0, color: ink }}>Join {name}</h3>
+          <p className="sub" style={{ marginTop: 6 }}>Book a call and get onboarded fast.</p>
           <div className="row" style={{ marginTop: 12 }}>
-            <button className="btn" style={{ background: primary, color: "#fff" }}>Start Pre-Exam</button>
-            <button className="btn btn-ghost">View Curriculum</button>
+            <button className="btn" style={{ background: primary, color: "#fff" }}>Book a Call</button>
+            <button className="btn btn-ghost">Learn More</button>
           </div>
+        </div>
+        <div style={{ padding: "10px 22px", borderTop: "1px solid var(--border)", color: "var(--muted)", fontSize: 12 }}>
+          © {new Date().getFullYear()} {footerLegal}
         </div>
       </div>
     </div>
