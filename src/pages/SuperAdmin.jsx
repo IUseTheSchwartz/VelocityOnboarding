@@ -157,10 +157,10 @@ export default function SuperAdmin() {
     await fetchMembers(agencyId);
   }
 
-  // ---- Invite making (any role) ----
-  function makeCode(len = 6) {
-    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    return Array.from({ length: len }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
+  // ---- Invite making (now via RPC) ----
+  function copy(text) {
+    navigator.clipboard.writeText(text);
+    setMsg("Copied.");
   }
 
   async function createInvite(agencyId) {
@@ -168,29 +168,20 @@ export default function SuperAdmin() {
     try {
       if (!agencyId) throw new Error("Select an agency first (click Edit).");
 
-      const { data: meRes, error: meErr } = await supabase.auth.getUser();
-      if (meErr) throw meErr;
-
-      const code = makeCode(6);
-      const expires = new Date(Date.now() + Number(inviteDays) * 24 * 60 * 60 * 1000).toISOString();
       const uses = Math.max(1, Number(inviteUses) || 1);
+      const days = Math.max(1, Number(inviteDays) || 1);
 
-      const payload = {
-        agency_id: agencyId,
-        code,
-        role: (inviteRole || "agent").toLowerCase(), // ensure lowercase
-        max_uses: uses,
-        expires_at: expires,
-        created_by: meRes?.user?.id || null,
-      };
+      const { data, error } = await supabase.rpc("admin_create_invite", {
+        p_agency_id: agencyId,
+        p_role: (inviteRole || "agent").toLowerCase(),
+        p_max_uses: uses,
+        p_days: days,
+      });
 
-      const { error } = await supabase.from("invite_codes").insert(payload);
-      if (error) {
-        console.error("createInvite error:", error);
-        throw error;
-      }
+      if (error) throw error;
 
-      setMsg(`Invite created (${payload.role}). Code: ${code}`);
+      const row = Array.isArray(data) ? data[0] : data;
+      setMsg(`Invite created (${row.role}). Code: ${row.code}`);
       await fetchInvites(agencyId);
     } catch (e) {
       setMsg(e.message || String(e));
@@ -199,15 +190,10 @@ export default function SuperAdmin() {
 
   async function disableInvite(id, agencyId) {
     setMsg("");
-    const { error } = await supabase.from("invite_codes").update({ status: "disabled" }).eq("id", id);
+    const { error } = await supabase.rpc("admin_disable_invite", { p_id: id });
     if (error) return setMsg(error.message);
     setMsg("Invite disabled.");
     await fetchInvites(agencyId);
-  }
-
-  function copy(text) {
-    navigator.clipboard.writeText(text);
-    setMsg("Copied.");
   }
 
   // --- Gate renders ---
@@ -446,7 +432,6 @@ export default function SuperAdmin() {
                           <td><span className="badge">{inv.status}</span></td>
                           <td>{inv.expires_at ? new Date(inv.expires_at).toLocaleString() : "—"}</td>
                           <td className="row" style={{ gap: 6 }}>
-                            {/* Copy CODE only (no URLs) */}
                             <button className="btn btn-ghost" onClick={()=>copy(inv.code)} title="Copy invite code">
                               <ClipboardCopy size={14}/> Copy code
                             </button>
