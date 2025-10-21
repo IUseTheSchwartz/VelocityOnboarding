@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 
 const APP_URL = import.meta.env.VITE_APP_URL || window.location.origin;
+const SUPER = (import.meta.env.VITE_SUPER_ADMIN_EMAIL || "").toLowerCase();
 
 export default function SuperAdmin() {
   const [me, setMe] = useState(null);
@@ -25,16 +26,32 @@ export default function SuperAdmin() {
   const [inviteUses, setInviteUses] = useState(1);
   const [inviteDays, setInviteDays] = useState(7);
 
-  useEffect(() => { (async () => {
-    const { data } = await supabase.auth.getUser();
-    setMe(data?.user ?? null);
-  })(); }, []);
+  // --- Admin UI gate with fallback to env super admin email ---
+  const [uiAdmin, setUiAdmin] = useState(false);
+  const [adminCheckDone, setAdminCheckDone] = useState(false);
 
-  const isAdminUI = async () => {
+  const isAdminUI = async (user) => {
+    const myEmail = (user?.email || "").toLowerCase();
+    if (SUPER && myEmail === SUPER) return true; // fallback
     const { data, error } = await supabase.rpc("is_current_admin");
-    if (error) return false;
+    if (error) {
+      console.warn("is_current_admin error:", error);
+      return false;
+    }
     return !!data;
   };
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      const user = data?.user ?? null;
+      setMe(user);
+
+      const ok = await isAdminUI(user);
+      setUiAdmin(ok);
+      setAdminCheckDone(true);
+    })();
+  }, []);
 
   async function fetchAgencies() {
     setLoading(true); setErr("");
@@ -76,7 +93,7 @@ export default function SuperAdmin() {
     if (!error) setAdmins(data || []);
   }
 
-  useEffect(() => { if (me) { fetchAgencies(); fetchAdmins(); } }, [me]);
+  useEffect(() => { if (uiAdmin) { fetchAgencies(); fetchAdmins(); } }, [uiAdmin]);
 
   const filtered = useMemo(() => {
     const t = q.trim().toLowerCase();
@@ -88,7 +105,13 @@ export default function SuperAdmin() {
   function startEdit(agency) {
     setSelected({
       ...agency,
-      _edit: { name: agency.name, slug: agency.slug, primary: agency.theme?.primary || "#1E63F0", ink: agency.theme?.ink || "#0B1535", logo_url: agency.logo_url || "" }
+      _edit: {
+        name: agency.name,
+        slug: agency.slug,
+        primary: agency.theme?.primary || "#1E63F0",
+        ink: agency.theme?.ink || "#0B1535",
+        logo_url: agency.logo_url || ""
+      }
     });
     fetchMembers(agency.id);
     fetchInvites(agency.id);
@@ -220,34 +243,8 @@ export default function SuperAdmin() {
     }
   }
 
-  // ---- Admins tab: add/remove admin emails ----
-  const [newAdminEmail, setNewAdminEmail] = useState("");
-
-  async function addAdmin() {
-    setMsg("");
-    const email = (newAdminEmail || "").trim().toLowerCase();
-    if (!email) return;
-    const { error } = await supabase.from("admin_users").insert({ email });
-    if (error) return setMsg(error.message);
-    setNewAdminEmail("");
-    setMsg("Admin added.");
-    await fetchAdmins();
-  }
-
-  async function removeAdmin(email) {
-    setMsg("");
-    if (email === (me?.email || "").toLowerCase()) return setMsg("You can’t remove yourself.");
-    const { error } = await supabase.from("admin_users").delete().eq("email", email);
-    if (error) return setMsg(error.message);
-    setMsg("Admin removed.");
-    await fetchAdmins();
-  }
-
-  // ---- Gate non-admin users in UI (defense-in-depth) ----
-  const [uiAdmin, setUiAdmin] = useState(false);
-  useEffect(() => { (async () => setUiAdmin(await isAdminUI()))(); /* eslint-disable-next-line */ }, [me]);
-
-  if (!me) return <Section><div className="sub">Loading…</div></Section>;
+  // --- Gate renders ---
+  if (!adminCheckDone) return <Section><div className="sub">Checking access…</div></Section>;
   if (!uiAdmin) {
     return (
       <Section>
@@ -267,20 +264,20 @@ export default function SuperAdmin() {
             <LayoutDashboard size={18}/> Super Admin
           </h2>
 
-        <div className="row" style={{ gap: 8, alignItems: "center" }}>
-          <button className={`btn ${tab==='agencies'?'btn-primary':'btn-ghost'}`} onClick={()=>setTab('agencies')}>Agencies</button>
-          <button className={`btn ${tab==='admins'?'btn-primary':'btn-ghost'}`} onClick={()=>setTab('admins')}>Admins</button>
+          <div className="row" style={{ gap: 8, alignItems: "center" }}>
+            <button className={`btn ${tab==='agencies'?'btn-primary':'btn-ghost'}`} onClick={()=>setTab('agencies')}>Agencies</button>
+            <button className={`btn ${tab==='admins'?'btn-primary':'btn-ghost'}`} onClick={()=>setTab('admins')}>Admins</button>
 
-          {tab === "agencies" && (
-            <>
-              <div className="row" style={{ gap: 8, alignItems: "center", background: "var(--panel)", padding: "6px 10px", borderRadius: 10, marginLeft: 8 }}>
-                <Search size={14}/>
-                <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search agencies…" style={{ border: "none", outline: "none", background: "transparent" }} />
-              </div>
-              <button className="btn btn-ghost" onClick={fetchAgencies} disabled={loading}><RefreshCw size={14}/> Refresh</button>
-            </>
-          )}
-        </div>
+            {tab === "agencies" && (
+              <>
+                <div className="row" style={{ gap: 8, alignItems: "center", background: "var(--panel)", padding: "6px 10px", borderRadius: 10, marginLeft: 8 }}>
+                  <Search size={14}/>
+                  <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search agencies…" style={{ border: "none", outline: "none", background: "transparent" }} />
+                </div>
+                <button className="btn btn-ghost" onClick={fetchAgencies} disabled={loading}><RefreshCw size={14}/> Refresh</button>
+              </>
+            )}
+          </div>
         </div>
 
         {msg && <div className="sub" style={{ color: /saved|created|disabled|copied|removed|unsuspended|suspended|sent|invite/i.test(msg) ? "green" : "crimson", marginTop: 8 }}>{msg}</div>}
@@ -548,7 +545,7 @@ function ProvisionAgencyForm() {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [llc, setLLC] = useState("");
-  const [calendly, setCalendly] = useState("");
+  ��const [calendly, setCalendly] = useState("");
 
   // theme + visibility
   const [primary, setPrimary] = useState("#1e63f0");
